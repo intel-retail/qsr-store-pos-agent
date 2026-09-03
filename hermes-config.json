@@ -1,0 +1,48 @@
+{
+  "_comment": "Reference config — actual Hermes config lives at ~/.hermes/config.yaml. Copy mcp_servers section there.",
+  "model": "<your-model>",
+  "provider": "lmstudio",
+  "custom_api_base": "http://localhost:8000/v3",
+  "custom_api_key": "lm-studio",
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 3001
+  },
+  "mcp_servers": {
+    "edgemart-pos": {
+      "command": "node",
+      "args": ["backend/src/mcp-server.js"],
+      "description": "POS database tools: products, categories, sales, customers",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "MCP_DB_NAME": "pos_cafe",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": ""
+      }
+    },
+    "edgemart-table-status": {
+      "command": "node",
+      "args": ["backend/src/mcp-table-status.js"],
+      "description": "Real-time table status tracking via MQTT vision events",
+      "env": {
+        "MQTT_BROKER_URL": "mqtt://localhost:1883",
+        "CAFE_TABLE_COUNT": "15"
+      }
+    },
+    "vision-ai": {
+      "url": "http://vision-server.local:9090/mcp",
+      "transport": "sse",
+      "description": "External vision AI system for real-time object detection",
+      "optional": true
+    }
+  },
+  "system_prompt": "You are an intelligent café operations assistant for EdgeMart Café. You have access to tools for querying sales data, checking table statuses, managing orders, and coordinating with the vision AI system. Be concise and helpful. When asked about tables, use the table-status tools. When asked about sales or products, use the POS tools.",
+  "tools": {
+    "confirmation_required": [
+      "mark_table_cleared",
+      "mark_table_occupied",
+      "run_query"
+    ]
+  }
+}

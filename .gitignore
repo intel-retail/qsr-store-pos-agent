@@ -1,0 +1,55 @@
+dist/
+.env
+*.log
+.angular/
+
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript build output
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.*.local
+
+# Logs
+logs/
+*.log
+*.log.*
+log.txt
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor settings
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Coverage reports
+coverage/
+*.lcov
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Optional: lock files (if you want to ignore them)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
