@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
 FROM node:20-alpine
 WORKDIR /app
 COPY package.json ./

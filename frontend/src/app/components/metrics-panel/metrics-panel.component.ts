@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Intel Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';

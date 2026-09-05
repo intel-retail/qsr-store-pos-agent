@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Build qmmd (Intel GPU metrics Prometheus daemon)
 FROM rust:1-alpine AS build
 RUN apk add --no-cache musl-dev pkgconfig eudev-dev

@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Intel Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 const express = require('express');
 const router = express.Router();
 const db = require('../db');

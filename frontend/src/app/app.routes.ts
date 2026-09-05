@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Intel Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { Routes } from '@angular/router';
 import { PosComponent } from './pages/pos/pos.component';
 import { TransactionsComponent } from './pages/transactions/transactions.component';
