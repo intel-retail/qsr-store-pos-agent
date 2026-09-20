@@ -1,0 +1,85 @@
+# Copyright (c) 2026 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Fully standalone sim-service stack — no dependency on the repo-root
+# docker-compose.yml or any of its containers (postgres/mqtt/backend/
+# frontend/qmmd never start). Its own Postgres + MQTT broker, own volumes.
+#
+# Run from anywhere:
+#   docker compose -f backend/src/sim-service/docker-compose.yml up -d
+#
+# NOTE: publishes the same host port (3100) as the sim-service block in the
+# repo-root docker-compose.yml. Don't run both at once.
+
+services:
+  sim-postgres:
+    image: postgres:16-alpine
+    container_name: sim-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      POSTGRES_DB: sim_events
+    volumes:
+      - sim_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  sim-mqtt:
+    image: eclipse-mosquitto:2
+    container_name: sim-mqtt
+    restart: unless-stopped
+    volumes:
+      - ../../../mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - sim_mqtt_data:/mosquitto/data
+
+  sim-service:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: sim-service-standalone
+    restart: unless-stopped
+    command: ["node", "src/sim-service/index.js"]
+    ports:
+      - "3100:3100"
+    environment:
+      SOURCE: ${SIM_SOURCE:-sim}
+      SIM_MODE: ${SIM_MODE:-live}
+      SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
+      SIM_SPEED: ${SIM_SPEED:-60}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      SIM_PORT: 3100
+      SIM_DB_NAME: sim_events
+      DB_HOST: sim-postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      CAFE_TABLE_COUNT: ${CAFE_TABLE_COUNT:-15}
+      MQTT_BROKER_URL: mqtt://sim-mqtt:1883
+    depends_on:
+      sim-postgres:
+        condition: service_healthy
+      sim-mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/sim/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  sim_postgres_data:
+  sim_mqtt_data:
+
+# Fixed, well-known name so another container/compose project can join this
+# stack's network instead of only reaching sim-service via its host port.
+networks:
+  default:
+    name: sim-service-net
+

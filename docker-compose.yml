@@ -81,6 +81,132 @@ services:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
       - mqtt_data:/mosquitto/data
 
+  # Sim Service (headless, deterministic event producer + durable log + hub)
+  # Reuses the backend image — same package.json, no extra deps. See
+  # backend/src/sim-service/SIM-SERVICE.md for the full env var reference.
+  sim-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY
+        - HTTPS_PROXY
+        - NO_PROXY
+    container_name: pos-sim-service
+    restart: unless-stopped
+    command: ["node", "src/sim-service/index.js"]
+    ports:
+      - "3100:3100"
+    environment:
+      SOURCE: ${SIM_SOURCE:-sim}
+      SIM_MODE: ${SIM_MODE:-live}
+      SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
+      SIM_SPEED: ${SIM_SPEED:-60}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      SIM_PORT: 3100
+      SIM_DB_NAME: pos_cafe
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      CAFE_TABLE_COUNT: ${CAFE_TABLE_COUNT:-15}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/sim/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Table occupancy & cleaning sim service. Same image as sim-service, own
+  # port/log table. See backend/src/table-sim-service/TABLE-SIM-SERVICE.md.
+  table-sim-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY
+        - HTTPS_PROXY
+        - NO_PROXY
+    container_name: pos-table-sim-service
+    restart: unless-stopped
+    command: ["node", "src/table-sim-service/index.js"]
+    ports:
+      - "3200:3200"
+    environment:
+      SOURCE: ${SIM_SOURCE:-sim}
+      SIM_MODE: ${SIM_MODE:-live}
+      SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
+      SIM_SPEED: ${SIM_SPEED:-60}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      TABLE_SIM_PORT: 3200
+      TABLE_SIM_DB_NAME: pos_cafe
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      CAFE_TABLE_COUNT: ${CAFE_TABLE_COUNT:-15}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3200/table-sim/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Footfall/movement sim service (read-only). Same image, own port/log table.
+  # See backend/src/footfall-sim-service/FOOTFALL-SIM-SERVICE.md.
+  footfall-sim-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY
+        - HTTPS_PROXY
+        - NO_PROXY
+    container_name: pos-footfall-sim-service
+    restart: unless-stopped
+    command: ["node", "src/footfall-sim-service/index.js"]
+    ports:
+      - "3300:3300"
+    environment:
+      SOURCE: ${SIM_SOURCE:-sim}
+      SIM_MODE: ${SIM_MODE:-live}
+      SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
+      SIM_SPEED: ${SIM_SPEED:-60}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      FOOTFALL_SIM_PORT: 3300
+      FOOTFALL_SIM_DB_NAME: pos_cafe
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3300/footfall-sim/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   # GPU Metrics Daemon (system-wide Intel GPU metrics via Prometheus)
   qmmd:
     build:
@@ -103,3 +229,11 @@ services:
 volumes:
   postgres_data:
   mqtt_data:
+
+# Fixed, well-known name so another container/compose project can join this
+# stack's network (e.g. `networks: { edgemart-net: { external: true } }`)
+# instead of only reaching sim-service via its published host port.
+networks:
+  default:
+    name: edgemart-net
+
