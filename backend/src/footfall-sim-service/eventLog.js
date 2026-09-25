@@ -103,8 +103,10 @@ class FootfallEventLog {
     const params = [];
     if (experience) { params.push(experience); clauses.push(`experience = $${params.length}`); }
     if (zone) { params.push(zone); clauses.push(`ref = $${params.length}`); }
-    if (startDate) { params.push(startDate); clauses.push(`occurred_at::date >= $${params.length}`); }
-    if (endDate) { params.push(endDate); clauses.push(`occurred_at::date <= $${params.length}`); }
+    // UTC-anchored — occurred_at::date truncates in the session TimeZone, which would
+    // shift which calendar day a boundary event falls into on a non-UTC host.
+    if (startDate) { params.push(startDate); clauses.push(`(occurred_at AT TIME ZONE 'UTC')::date >= $${params.length}::date`); }
+    if (endDate) { params.push(endDate); clauses.push(`(occurred_at AT TIME ZONE 'UTC')::date <= $${params.length}::date`); }
     return { where: clauses.join(' AND '), params };
   }
 
@@ -159,16 +161,20 @@ class FootfallEventLog {
       const spanMs = new Date(`${endDate}T00:00:00.000Z`).getTime() - new Date(`${startDate}T00:00:00.000Z`).getTime();
       totalDays = Math.floor(spanMs / 86_400_000) + 1;
     } else {
+      // UTC-anchored, same reasoning as _buildFilters above.
       const daysResult = await this.pool.query(
-        `SELECT COUNT(DISTINCT occurred_at::date) AS days FROM footfall_sim_events WHERE ${where}`,
+        `SELECT COUNT(DISTINCT (occurred_at AT TIME ZONE 'UTC')::date) AS days FROM footfall_sim_events WHERE ${where}`,
         params
       );
       totalDays = Number(daysResult.rows[0].days) || 0;
     }
 
     const countExpr = "CASE WHEN payload->>'count' ~ '^[0-9]+$' THEN (payload->>'count')::int ELSE 0 END";
+    // Hour also anchored to UTC — EXTRACT(HOUR FROM ts) implicitly converts to the
+    // session TimeZone first, which would silently shift every reported busy hour
+    // by the server's UTC offset (the actual bug this comment is guarding against).
     const result = await this.pool.query(
-      `SELECT EXTRACT(HOUR FROM occurred_at)::int AS hour,
+      `SELECT EXTRACT(HOUR FROM occurred_at AT TIME ZONE 'UTC')::int AS hour,
               COALESCE(SUM(${countExpr}), 0) AS total_footfall
        FROM footfall_sim_events WHERE ${where}
        GROUP BY hour ORDER BY hour`,

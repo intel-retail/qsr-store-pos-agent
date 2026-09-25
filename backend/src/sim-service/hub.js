@@ -40,7 +40,11 @@ class SimEventHub extends EventEmitter {
     this.mqttClient = mqtt.connect(this.mqttBrokerUrl, {
       reconnectPeriod: 5000,
       connectTimeout: 10000,
-      clientId: `sim-hub-${Date.now()}`,
+      // pid + random suffix, not just Date.now() — two hubs (e.g. sim-service and
+      // table-sim-service) starting in the same millisecond would otherwise get an
+      // identical client ID, and MQTT brokers disconnect the older duplicate on
+      // every connect, causing the two processes to fight forever.
+      clientId: `sim-hub-${this.mqttTopicPrefix}-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     });
     this.mqttClient.on('error', (err) => console.error('[SimHub] MQTT error:', err.message));
 

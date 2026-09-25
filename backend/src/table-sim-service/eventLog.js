@@ -224,8 +224,10 @@ class TableEventLog {
     const params = [tableRef];
     if (experience) { params.push(experience); clauses.push(`experience = $${params.length}`); }
     params.push(Math.min(Math.max(1, limit), 1000));
+    // sim_date::text avoids pg's DATE->Date parsing (local y/m/d construction), which
+    // shifts the calendar day on non-UTC hosts when the driver's Date is serialized.
     const result = await this.pool.query(
-      `SELECT event_type, severity, source, occurred_at, sim_date, payload
+      `SELECT event_type, severity, source, occurred_at, sim_date::text AS sim_date, payload
        FROM table_sim_events
        WHERE ${clauses.join(' AND ')}
        ORDER BY occurred_at DESC LIMIT $${params.length}`,
@@ -240,8 +242,10 @@ class TableEventLog {
     const params = [];
     if (experience) { params.push(experience); clauses.push(`experience = $${params.length}`); }
     if (tableRef) { params.push(tableRef); clauses.push(`ref = $${params.length}`); }
-    if (startDate) { params.push(startDate); clauses.push(`occurred_at::date >= $${params.length}`); }
-    if (endDate) { params.push(endDate); clauses.push(`occurred_at::date <= $${params.length}`); }
+    // UTC-anchored — occurred_at::date truncates in the session TimeZone, which would
+    // shift which calendar day a boundary event falls into on a non-UTC host.
+    if (startDate) { params.push(startDate); clauses.push(`(occurred_at AT TIME ZONE 'UTC')::date >= $${params.length}::date`); }
+    if (endDate) { params.push(endDate); clauses.push(`(occurred_at AT TIME ZONE 'UTC')::date <= $${params.length}::date`); }
     return { where: clauses.join(' AND '), params };
   }
 
