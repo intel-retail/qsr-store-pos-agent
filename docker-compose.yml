@@ -207,6 +207,110 @@ services:
       retries: 3
       start_period: 10s
 
+  # MCP servers, streamable-HTTP mode (POST /mcp) — same images/tools as the
+  # stdio MCP servers above, for agent frameworks that register MCP services by
+  # URL rather than by spawning a stdio child process (e.g. intel-retail/qsr-agent's
+  # agent-config/hermes/remote-mcp.yaml). MCP_TRANSPORT=http is the only
+  # difference from running `node src/*/mcp-*-server.js` directly over stdio.
+  sim-service-mcp:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pos-sim-service-mcp
+    restart: unless-stopped
+    command: ["node", "src/sim-service/mcp-sim-server.js"]
+    ports:
+      - "3101:3101"
+    environment:
+      MCP_TRANSPORT: http
+      MCP_HTTP_PORT: 3101
+      SOURCE: ${SIM_SOURCE:-sim}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      SIM_DB_NAME: pos_cafe
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3101/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  table-sim-service-mcp:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pos-table-sim-service-mcp
+    restart: unless-stopped
+    command: ["node", "src/table-sim-service/mcp-table-sim-server.js"]
+    ports:
+      - "3201:3201"
+    environment:
+      MCP_TRANSPORT: http
+      MCP_HTTP_PORT: 3201
+      SOURCE: ${SIM_SOURCE:-sim}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      TABLE_SIM_DB_NAME: pos_cafe
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3201/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  footfall-sim-service-mcp:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pos-footfall-sim-service-mcp
+    restart: unless-stopped
+    command: ["node", "src/footfall-sim-service/mcp-footfall-sim-server.js"]
+    ports:
+      - "3301:3301"
+    environment:
+      MCP_TRANSPORT: http
+      MCP_HTTP_PORT: 3301
+      SOURCE: ${SIM_SOURCE:-sim}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      FOOTFALL_SIM_DB_NAME: pos_cafe
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3301/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   # GPU Metrics Daemon (system-wide Intel GPU metrics via Prometheus)
   qmmd:
     build:

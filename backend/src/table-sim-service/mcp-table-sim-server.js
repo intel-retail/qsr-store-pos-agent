@@ -9,12 +9,7 @@
 // #100/#101), reusing its hub and envelope modules directly. Push events go
 // to the hub, not through MCP.
 
-const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
-const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
-const {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} = require('@modelcontextprotocol/sdk/types.js');
+const { z } = require('zod');
 const path = require('path');
 
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
@@ -22,6 +17,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const { TableEventLog } = require('./eventLog');
 const { SimEventHub } = require('../sim-service/hub');
 const { EVENT_TYPES, SEVERITIES, createEnvelope } = require('../sim-service/envelope');
+const { connectTransport } = require('../sim-service/mcpTransport');
 
 const SOURCE = process.env.SOURCE || 'sim'; // 'sim' | 'real'
 const BENCHMARK = process.env.SIM_BENCHMARK === '1' || process.env.SIM_BENCHMARK === 'true';
@@ -37,75 +33,57 @@ const TOOLS = [
   {
     name: 'describe_service',
     description: 'Describe this table occupancy & cleaning service: source mode, envelope schema, and capabilities.',
-    inputSchema: { type: 'object', properties: {}, required: [] },
+    parameters: z.object({}),
   },
   {
     name: 'list_event_types',
     description: 'List the table event types this service publishes, with what triggers each.',
-    inputSchema: { type: 'object', properties: {}, required: [] },
+    parameters: z.object({}),
   },
   {
     name: 'get_utilization',
     description: 'Read: per-table utilization (occupied time / period time) and occupied-cycle count over a date range.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        experience: { type: 'string', description: "default 'cafe'" },
-        table_ref: { type: 'string', description: "Limit to one table, e.g. 'table-4'" },
-        start_date: { type: 'string', description: 'YYYY-MM-DD' },
-        end_date: { type: 'string', description: 'YYYY-MM-DD' },
-      },
-    },
+    parameters: z.object({
+      experience: z.string().describe("default 'cafe'").optional(),
+      table_ref: z.string().describe("Limit to one table, e.g. 'table-4'").optional(),
+      start_date: z.string().describe('YYYY-MM-DD').optional(),
+      end_date: z.string().describe('YYYY-MM-DD').optional(),
+    }),
   },
   {
     name: 'get_dirty_duration_stats',
     description: 'Read: how long tables sat dirty before being cleared — count/avg/min/max, overall and per table. This is what "dirty > N minutes" detection is built on.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        experience: { type: 'string' },
-        table_ref: { type: 'string' },
-        start_date: { type: 'string', description: 'YYYY-MM-DD' },
-        end_date: { type: 'string', description: 'YYYY-MM-DD' },
-      },
-    },
+    parameters: z.object({
+      experience: z.string().optional(),
+      table_ref: z.string().optional(),
+      start_date: z.string().describe('YYYY-MM-DD').optional(),
+      end_date: z.string().describe('YYYY-MM-DD').optional(),
+    }),
   },
   {
     name: 'get_table_history',
     description: 'Read: the full occupied/dirty/cleared timeline for one table, most recent first.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        experience: { type: 'string' },
-        table_ref: { type: 'string', description: "e.g. 'table-4'" },
-        limit: { type: 'number', description: 'Max rows (default 100)' },
-      },
-      required: ['table_ref'],
-    },
+    parameters: z.object({
+      experience: z.string().optional(),
+      table_ref: z.string().describe("e.g. 'table-4'"),
+      limit: z.number().describe('Max rows (default 100)').optional(),
+    }),
   },
   {
     name: 'mark_table_cleared',
     description: 'Action: mark a table cleared. Appends a table.cleared event to the durable log and publishes it to the hub.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        experience: { type: 'string' },
-        table_ref: { type: 'string', description: "e.g. 'table-4'" },
-      },
-      required: ['table_ref'],
-    },
+    parameters: z.object({
+      experience: z.string().optional(),
+      table_ref: z.string().describe("e.g. 'table-4'"),
+    }),
   },
   {
     name: 'mark_table_occupied',
     description: 'Action: mark a table occupied. Appends a table.occupied event to the durable log and publishes it to the hub.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        experience: { type: 'string' },
-        table_ref: { type: 'string', description: "e.g. 'table-4'" },
-      },
-      required: ['table_ref'],
-    },
+    parameters: z.object({
+      experience: z.string().optional(),
+      table_ref: z.string().describe("e.g. 'table-4'"),
+    }),
   },
 ];
 
@@ -220,30 +198,7 @@ async function handleTool(name, args = {}) {
 
 async function main() {
   await getLog().init();
-
-  const server = new Server(
-    { name: 'edgemart-table-sim-service', version: '1.0.0' },
-    { capabilities: { tools: {} } }
-  );
-
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
-
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    try {
-      const result = await handleTool(request.params.name, request.params.arguments || {});
-      // A "soft" validation failure (e.g. missing table_ref) comes back as a
-      // normal-looking { error } object rather than a thrown exception — flag
-      // it the same way so a client can trust isError instead of parsing content.
-      const isError = !!(result && typeof result === 'object' && !Array.isArray(result) && 'error' in result);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], isError };
-    } catch (err) {
-      return { content: [{ type: 'text', text: JSON.stringify({ error: err.message }) }], isError: true };
-    }
-  });
-
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error('[table-sim-service] MCP server running on stdio');
+  await connectTransport({ name: 'edgemart-table-sim-service', label: 'table-sim-service', httpPort: 3201, tools: TOOLS, handleTool });
 }
 
 main().catch((err) => {

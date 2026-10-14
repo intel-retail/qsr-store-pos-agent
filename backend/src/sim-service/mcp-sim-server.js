@@ -11,12 +11,7 @@
 // Standalone process, run alongside (not instead of) the existing
 // backend/src/mcp-server.js and mcp-table-status.js.
 
-const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
-const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
-const {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} = require('@modelcontextprotocol/sdk/types.js');
+const { z } = require('zod');
 const path = require('path');
 
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
@@ -24,6 +19,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const { SimEventLog } = require('./eventLog');
 const { SimEventHub } = require('./hub');
 const { EVENT_TYPES, SEVERITIES, createEnvelope } = require('./envelope');
+const { connectTransport } = require('./mcpTransport');
 
 const SOURCE = process.env.SOURCE || 'sim'; // 'sim' | 'real' — documented switch, see SIM-SERVICE.md
 const BENCHMARK = process.env.SIM_BENCHMARK === '1' || process.env.SIM_BENCHMARK === 'true';
@@ -44,88 +40,67 @@ const TOOLS = [
   {
     name: 'describe_service',
     description: 'Describe this sim service: source mode, envelope schema, and capabilities. Call this first if you have never seen this service before.',
-    inputSchema: { type: 'object', properties: {}, required: [] },
+    parameters: z.object({}),
   },
   {
     name: 'list_event_types',
     description: 'List every event type this service can publish, with what triggers it.',
-    inputSchema: { type: 'object', properties: {}, required: [] },
+    parameters: z.object({}),
   },
   {
     name: 'query_history',
     description: 'Read event counts grouped by period (hour or day), optionally filtered by experience/event type/date range.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        experience: { type: 'string', description: "'cafe' or 'grocery', default 'cafe'" },
-        event_type: { type: 'string', description: 'Filter to one event type' },
-        group_by: { type: 'string', enum: ['hour', 'day'], description: 'Bucket size, default day' },
-        start_date: { type: 'string', description: 'YYYY-MM-DD' },
-        end_date: { type: 'string', description: 'YYYY-MM-DD' },
-      },
-    },
+    parameters: z.object({
+      experience: z.string().describe("'cafe' or 'grocery', default 'cafe'").optional(),
+      event_type: z.string().describe('Filter to one event type').optional(),
+      group_by: z.enum(['hour', 'day']).describe('Bucket size, default day').optional(),
+      start_date: z.string().describe('YYYY-MM-DD').optional(),
+      end_date: z.string().describe('YYYY-MM-DD').optional(),
+    }),
   },
   {
     name: 'compare_to_baseline',
     description: 'Compare event counts for one date against a baseline date, per event type.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        experience: { type: 'string' },
-        event_type: { type: 'string' },
-        date: { type: 'string', description: 'YYYY-MM-DD' },
-        baseline_date: { type: 'string', description: 'YYYY-MM-DD' },
-      },
-      required: ['date', 'baseline_date'],
-    },
+    parameters: z.object({
+      experience: z.string().optional(),
+      event_type: z.string().optional(),
+      date: z.string().describe('YYYY-MM-DD'),
+      baseline_date: z.string().describe('YYYY-MM-DD'),
+    }),
   },
   {
     name: 'tail_events',
     description: 'Read events appended after a given log id (poll-based tail of the durable log).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        since_id: { type: 'number', description: 'Return events with id greater than this (default 0)' },
-        limit: { type: 'number', description: 'Max rows (default 100)' },
-      },
-    },
+    parameters: z.object({
+      since_id: z.number().describe('Return events with id greater than this (default 0)').optional(),
+      limit: z.number().describe('Max rows (default 100)').optional(),
+    }),
   },
   {
     name: 'get_current_snapshot',
     description: 'Get the latest known state per ref (e.g. per table) derived from the log — current table/queue status.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        experience: { type: 'string' },
-      },
-    },
+    parameters: z.object({
+      experience: z.string().optional(),
+    }),
   },
   {
     name: 'mark_table_cleared',
     description: 'Action: mark a table cleared. Appends a table.cleared event to the durable log and publishes it to the hub, the same path a real action would use.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        experience: { type: 'string' },
-        table_ref: { type: 'string', description: "e.g. 'table-4'" },
-      },
-      required: ['table_ref'],
-    },
+    parameters: z.object({
+      experience: z.string().optional(),
+      table_ref: z.string().describe("e.g. 'table-4'"),
+    }),
   },
   {
     name: 'inject_event',
     description: 'Action: manually inject an event of any known type onto the same envelope/log/hub path the producer uses. Useful for testing, and for a real pipeline (SOURCE=real) to submit events.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        experience: { type: 'string' },
-        event_type: { type: 'string', description: 'One of the types returned by list_event_types' },
-        ref: { type: 'string' },
-        severity: { type: 'string', enum: Object.values(SEVERITIES) },
-        payload: { type: 'object' },
-      },
-      required: ['event_type'],
-    },
+    parameters: z.object({
+      experience: z.string().optional(),
+      event_type: z.string().describe('One of the types returned by list_event_types'),
+      ref: z.string().optional(),
+      severity: z.enum(Object.values(SEVERITIES)).optional(),
+      payload: z.record(z.string(), z.unknown()).optional(),
+    }),
   },
 ];
 
@@ -253,30 +228,7 @@ async function handleTool(name, args = {}) {
 
 async function main() {
   await getLog().init();
-
-  const server = new Server(
-    { name: 'edgemart-sim-service', version: '1.0.0' },
-    { capabilities: { tools: {} } }
-  );
-
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
-
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    try {
-      const result = await handleTool(request.params.name, request.params.arguments || {});
-      // A "soft" validation failure (e.g. missing table_ref) comes back as a
-      // normal-looking { error } object rather than a thrown exception — flag
-      // it the same way so a client can trust isError instead of parsing content.
-      const isError = !!(result && typeof result === 'object' && !Array.isArray(result) && 'error' in result);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], isError };
-    } catch (err) {
-      return { content: [{ type: 'text', text: JSON.stringify({ error: err.message }) }], isError: true };
-    }
-  });
-
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error('[sim-service] MCP server running on stdio');
+  await connectTransport({ name: 'edgemart-sim-service', label: 'sim-service', httpPort: 3101, tools: TOOLS, handleTool });
 }
 
 main().catch((err) => {
