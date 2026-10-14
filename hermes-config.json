@@ -30,6 +30,54 @@
         "CAFE_TABLE_COUNT": "15"
       }
     },
+    "edgemart-sim-service": {
+      "command": "node",
+      "args": ["backend/src/sim-service/mcp-sim-server.js"],
+      "description": "Sim service describe/read/act contract: event history, baseline comparison, current table/queue snapshot, and table/inject actions",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "SIM_DB_NAME": "pos_cafe",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "",
+        "SOURCE": "sim",
+        "SIM_EXPERIENCE": "cafe",
+        "SIM_BENCHMARK": "0",
+        "MQTT_BROKER_URL": "mqtt://localhost:1883"
+      }
+    },
+    "edgemart-table-sim-service": {
+      "command": "node",
+      "args": ["backend/src/table-sim-service/mcp-table-sim-server.js"],
+      "description": "Table occupancy & cleaning sim service: utilization, dirty-duration stats, per-table history, and mark_table_cleared/mark_table_occupied actions",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "TABLE_SIM_DB_NAME": "pos_cafe",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "",
+        "SOURCE": "sim",
+        "SIM_EXPERIENCE": "cafe",
+        "SIM_BENCHMARK": "0",
+        "MQTT_BROKER_URL": "mqtt://localhost:1883"
+      }
+    },
+    "edgemart-footfall-sim-service": {
+      "command": "node",
+      "args": ["backend/src/footfall-sim-service/mcp-footfall-sim-server.js"],
+      "description": "Footfall/movement sim service: total footfall and busy-time patterns by zone (read-only, no actions)",
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "FOOTFALL_SIM_DB_NAME": "pos_cafe",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "",
+        "SOURCE": "sim",
+        "SIM_EXPERIENCE": "cafe",
+        "SIM_BENCHMARK": "0",
+        "MQTT_BROKER_URL": "mqtt://localhost:1883"
+      }
+    },
     "vision-ai": {
       "url": "http://vision-server.local:9090/mcp",
       "transport": "sse",
