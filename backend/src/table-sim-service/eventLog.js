@@ -84,11 +84,17 @@ function pairOccupiedDirty(rows) {
 /**
  * The denominator is the requested window when given — falling back to the
  * observed event span would silently shrink "utilization for May" down to
- * whatever days happened to have events in them.
+ * whatever days happened to have events in them. `periodEnd` specifically
+ * falls back to "now" rather than the observed span: with no `endDate`, the
+ * caller means "as of now", and an open session's duration is measured
+ * through `periodEnd` elsewhere in this file — falling back to the last
+ * *observed* event instead would make an open session (which is often that
+ * very last observed event) measure as ~0 duration instead of "ongoing,
+ * elapsed so far".
  */
-function computePeriodBounds({ startDate, endDate, observedStart, observedEnd }) {
+function computePeriodBounds({ startDate, endDate, observedStart }) {
   const periodStart = startDate ? new Date(`${startDate}T00:00:00.000Z`).getTime() : observedStart;
-  const periodEnd = endDate ? new Date(`${endDate}T23:59:59.999Z`).getTime() : observedEnd;
+  const periodEnd = endDate ? new Date(`${endDate}T23:59:59.999Z`).getTime() : Date.now();
   const periodMs = (periodStart != null && periodEnd != null) ? periodEnd - periodStart : 0;
   return { periodStart, periodEnd, periodMs };
 }
@@ -208,6 +214,28 @@ class TableEventLog {
     return result.rows;
   }
 
+  /**
+   * Pages through tail() until the backlog since `sinceId` is fully drained,
+   * instead of capping at tail()'s own per-call row limit — used by SSE
+   * resume, whose "no missed events" contract a single capped tail() call
+   * would otherwise silently violate on a long enough disconnect. `maxPages`
+   * is a safety bound against a pathological case (e.g. a misconfigured
+   * firehose producer outpacing drainage), not an expected limit.
+   */
+  async drainTail({ sinceId = 0, pageSize = 1000, maxPages = 10000 } = {}) {
+    const rows = [];
+    let cursor = sinceId;
+    for (let page = 0; page < maxPages; page += 1) {
+      const batch = await this.tail({ sinceId: cursor, limit: pageSize });
+      rows.push(...batch);
+      if (batch.length < pageSize) return rows;
+      cursor = batch[batch.length - 1].id;
+    }
+    console.error(`[TableEventLog] drainTail stopped after ${maxPages} pages (sinceId=${sinceId}) — backlog is still growing faster than it can be drained.`);
+    return rows;
+  }
+
+
   /** All events recorded for one simulated calendar day, in original order — the replay source. */
   async replayDay({ experience, simDate }) {
     const result = await this.pool.query(
@@ -270,8 +298,8 @@ class TableEventLog {
       params
     );
 
-    const { sessions, observedStart, observedEnd } = pairOccupiedDirty(result.rows);
-    const { periodStart, periodEnd, periodMs } = computePeriodBounds({ startDate, endDate, observedStart, observedEnd });
+    const { sessions, observedStart } = pairOccupiedDirty(result.rows);
+    const { periodStart, periodEnd, periodMs } = computePeriodBounds({ startDate, endDate, observedStart });
 
     const byTable = new Map();
     for (const session of sessions) {
@@ -318,13 +346,18 @@ class TableEventLog {
       params
     );
 
-    const { sessions, observedStart, observedEnd } = pairDirtyCleared(result.rows);
-    const { periodEnd } = computePeriodBounds({ startDate, endDate, observedStart, observedEnd });
+    const { sessions, observedStart } = pairDirtyCleared(result.rows);
+    const { periodStart, periodEnd } = computePeriodBounds({ startDate, endDate, observedStart });
 
     const byTable = new Map();
     const overall = [];
     for (const session of sessions) {
       const clearedAtMs = session.clearedAt ?? periodEnd ?? Date.now();
+      // The 1-day lookback (queryStartDate above) exists so a session that
+      // crosses into the requested period from before it isn't missed — not
+      // to admit one that both starts and ends entirely before the period,
+      // which would otherwise inflate these stats with out-of-range data.
+      if (clipOverlapMs(session.dirtyAt, clearedAtMs, periodStart, periodEnd) <= 0) continue;
       const seconds = Math.round((clearedAtMs - session.dirtyAt) / 1000);
       if (seconds < 0) continue; // guards a clock/ordering anomaly rather than reporting a negative duration
       if (!byTable.has(session.ref)) byTable.set(session.ref, []);

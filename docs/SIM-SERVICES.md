@@ -102,12 +102,14 @@ same way to the other two once they're containerized.
 **2. MQTT** — subscribe to `mqtt://localhost:1883` (or the container name from
 inside Docker) on the relevant topic tree, e.g. `table-sim/+/events/#`.
 
-**3. MCP (stdio)** — not reachable over the network; the consumer (typically
-an agent gateway like Hermes) spawns the MCP server itself. All three are
-already registered as a reference in [hermes-config.json](../hermes-config.json)
-(`edgemart-sim-service`, `edgemart-table-sim-service`,
-`edgemart-footfall-sim-service`) — copy the relevant block into
-`~/.hermes/config.yaml`, replacing the path with your actual checkout:
+**3. MCP** — both transports are available, not stdio-only:
+
+- **stdio** — the consumer (typically an agent gateway like Hermes) spawns
+  the MCP server itself; not reachable over the network. All three are
+  already registered as a reference in [hermes-config.json](../hermes-config.json)
+  (`edgemart-sim-service`, `edgemart-table-sim-service`,
+  `edgemart-footfall-sim-service`) — copy the relevant block into
+  `~/.hermes/config.yaml`, replacing the path with your actual checkout:
 
 ```yaml
 mcp_servers:
@@ -125,6 +127,15 @@ mcp_servers:
       MQTT_BROKER_URL: mqtt://localhost:1883
 ```
 
+- **streamable-HTTP** — the root [`docker-compose.yml`](../docker-compose.yml)
+  publishes all three over the network, `POST /mcp` on `3101`
+  (`edgemart-sim-service`), `3201` (`edgemart-table-sim-service`), and `3301`
+  (`edgemart-footfall-sim-service`) — for an agent framework that registers
+  MCP services by URL instead of spawning a stdio child (e.g.
+  intel-retail/qsr-agent's `agent-config/hermes/remote-mcp.yaml`, which uses
+  exactly this). Set `MCP_API_KEY` to require a matching `X-Api-Key` (or
+  `Authorization: Bearer`) header on these endpoints; unset, they're open.
+
 Each MCP server's actual tool list (`describe_service`, `list_event_types`,
 plus the service-specific read/act tools) is discoverable by calling
 `describe_service`/`list_event_types` at runtime, or by reading the
@@ -135,4 +146,7 @@ plus the service-specific read/act tools) is discoverable by calling
 Each service's `SOURCE` switch is independent — you can run one in `real`
 mode (ingesting from an actual pipeline via its `/…/ingest` endpoint) while
 the other two stay in `sim` mode. Nothing on the agent/MCP side changes
-either way; that's the point of the contract.
+either way; that's the point of the contract. Via the root `docker-compose.yml`,
+control this per service with `SIM_SOURCE`, `TABLE_SIM_SOURCE`, and
+`FOOTFALL_SIM_SOURCE` — each defaults to `sim` and only affects its own
+service (and its MCP sidecar).

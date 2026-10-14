@@ -98,6 +98,13 @@ class SimEventHub extends EventEmitter {
     this.sseClients.add(res);
 
     if (getReplay) {
+      // Buffer, rather than immediately write, any live event that arrives
+      // while the replay/backfill query below is still in flight — otherwise
+      // a live event can reach this client before the (older) backlog rows
+      // the replay is about to write, breaking the durable log's ordering
+      // guarantee. See _deliver()'s per-client loop and _flushBufferedLive().
+      res._replayPending = true;
+      res._bufferedLive = [];
       Promise.resolve(getReplay())
         .then((replay) => {
           for (const envelope of replay) {
@@ -105,7 +112,8 @@ class SimEventHub extends EventEmitter {
             this._writeSseMessage(res, envelope);
           }
         })
-        .catch((err) => console.error('[SimHub] Failed to write SSE replay:', err.message));
+        .catch((err) => console.error('[SimHub] Failed to write SSE replay:', err.message))
+        .finally(() => this._flushBufferedLive(res));
     }
 
     // Keep the connection alive (and visibly non-stalled) even when no events
@@ -123,6 +131,24 @@ class SimEventHub extends EventEmitter {
   /** `id:` is the envelope's event_id, so a client's Last-Event-ID header round-trips cleanly. */
   _writeSseMessage(res, envelope) {
     res.write(`id: ${envelope.event_id}\ndata: ${JSON.stringify(envelope)}\n\n`);
+  }
+
+  /**
+   * Writes any live events that arrived (and were queued, not sent) while
+   * this client's replay/backfill was in flight, in arrival order, then
+   * switches the client to normal immediate-write delivery. Runs whether the
+   * replay succeeded or failed (via .finally() in attachSSE), so a failed
+   * replay can't leave a client stuck buffering — and therefore silently
+   * invisible to live events — forever.
+   */
+  _flushBufferedLive(res) {
+    const buffered = res._bufferedLive || [];
+    res._bufferedLive = [];
+    res._replayPending = false;
+    for (const envelope of buffered) {
+      if (res.writableEnded) break;
+      this._writeSseMessage(res, envelope);
+    }
   }
 
   /**
@@ -147,7 +173,15 @@ class SimEventHub extends EventEmitter {
     if (!this.enabled) return true;
 
     for (const client of this.sseClients) {
-      this._writeSseMessage(client, envelope);
+      // A client mid-replay (see attachSSE/_flushBufferedLive) gets this
+      // queued instead of written immediately, so its backlog can't be
+      // overtaken by a live event that arrived while the backlog query was
+      // still running.
+      if (client._replayPending) {
+        client._bufferedLive.push(envelope);
+      } else {
+        this._writeSseMessage(client, envelope);
+      }
       if (client._sentEventIds) client._sentEventIds.add(envelope.event_id);
     }
 

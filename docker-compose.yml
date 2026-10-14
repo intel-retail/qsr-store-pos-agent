@@ -106,6 +106,7 @@ services:
       SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
       SIM_PORT: 3100
       SIM_DB_NAME: pos_cafe
+      SIM_API_KEY: ${SIM_API_KEY:-}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
@@ -140,7 +141,7 @@ services:
     ports:
       - "3200:3200"
     environment:
-      SOURCE: ${SIM_SOURCE:-sim}
+      SOURCE: ${TABLE_SIM_SOURCE:-sim}
       SIM_MODE: ${SIM_MODE:-live}
       SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
       SIM_SPEED: ${SIM_SPEED:-60}
@@ -148,6 +149,7 @@ services:
       SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
       TABLE_SIM_PORT: 3200
       TABLE_SIM_DB_NAME: pos_cafe
+      TABLE_SIM_API_KEY: ${TABLE_SIM_API_KEY:-}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
@@ -182,7 +184,7 @@ services:
     ports:
       - "3300:3300"
     environment:
-      SOURCE: ${SIM_SOURCE:-sim}
+      SOURCE: ${FOOTFALL_SIM_SOURCE:-sim}
       SIM_MODE: ${SIM_MODE:-live}
       SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
       SIM_SPEED: ${SIM_SPEED:-60}
@@ -190,6 +192,7 @@ services:
       SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
       FOOTFALL_SIM_PORT: 3300
       FOOTFALL_SIM_DB_NAME: pos_cafe
+      FOOTFALL_SIM_API_KEY: ${FOOTFALL_SIM_API_KEY:-}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
@@ -224,6 +227,7 @@ services:
     environment:
       MCP_TRANSPORT: http
       MCP_HTTP_PORT: 3101
+      MCP_API_KEY: ${MCP_API_KEY:-}
       SOURCE: ${SIM_SOURCE:-sim}
       SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
       SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
@@ -257,7 +261,8 @@ services:
     environment:
       MCP_TRANSPORT: http
       MCP_HTTP_PORT: 3201
-      SOURCE: ${SIM_SOURCE:-sim}
+      MCP_API_KEY: ${MCP_API_KEY:-}
+      SOURCE: ${TABLE_SIM_SOURCE:-sim}
       SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
       SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
       TABLE_SIM_DB_NAME: pos_cafe
@@ -290,7 +295,8 @@ services:
     environment:
       MCP_TRANSPORT: http
       MCP_HTTP_PORT: 3301
-      SOURCE: ${SIM_SOURCE:-sim}
+      MCP_API_KEY: ${MCP_API_KEY:-}
+      SOURCE: ${FOOTFALL_SIM_SOURCE:-sim}
       SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
       SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
       FOOTFALL_SIM_DB_NAME: pos_cafe

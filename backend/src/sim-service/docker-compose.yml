@@ -21,6 +21,12 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD:-posdev2024}
       POSTGRES_DB: sim_events
+    # Published so a host-spawned MCP process (see SIM-SERVICE.md's "Using it
+    # from outside any container" section) can reach it at localhost:5432 —
+    # without this, that documented workflow can't actually connect when
+    # using this standalone stack instead of the repo-root one.
+    ports:
+      - "5432:5432"
     volumes:
       - sim_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -33,6 +39,11 @@ services:
     image: eclipse-mosquitto:2
     container_name: sim-mqtt
     restart: unless-stopped
+    # Published for the same reason as sim-postgres above — host-spawned
+    # processes (MCP or otherwise) need mqtt://localhost:1883 reachable.
+    ports:
+      - "1883:1883"
+      - "9001:9001"
     volumes:
       - ../../../mosquitto.conf:/mosquitto/config/mosquitto.conf
       - sim_mqtt_data:/mosquitto/data

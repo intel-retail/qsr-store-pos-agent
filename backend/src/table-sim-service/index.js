@@ -93,7 +93,7 @@ async function main() {
       getReplay: lastEventId ? async () => {
         const sinceId = await log.findLogId(lastEventId);
         if (sinceId == null) return [];
-        return (await log.tail({ sinceId, limit: 1000 })).map(rowToWireEnvelope);
+        return (await log.drainTail({ sinceId })).map(rowToWireEnvelope);
       } : undefined,
     });
   });

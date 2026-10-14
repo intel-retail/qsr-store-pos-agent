@@ -97,6 +97,28 @@ class SimEventLog {
     return result.rows;
   }
 
+  /**
+   * Pages through tail() until the backlog since `sinceId` is fully drained,
+   * instead of capping at tail()'s own per-call row limit — used by SSE
+   * resume, whose "no missed events" contract a single capped tail() call
+   * would otherwise silently violate on a long enough disconnect. `maxPages`
+   * is a safety bound against a pathological case (e.g. a misconfigured
+   * firehose producer outpacing drainage), not an expected limit.
+   */
+  async drainTail({ sinceId = 0, pageSize = 1000, maxPages = 10000 } = {}) {
+    const rows = [];
+    let cursor = sinceId;
+    for (let page = 0; page < maxPages; page += 1) {
+      const batch = await this.tail({ sinceId: cursor, limit: pageSize });
+      rows.push(...batch);
+      if (batch.length < pageSize) return rows;
+      cursor = batch[batch.length - 1].id;
+    }
+    console.error(`[SimEventLog] drainTail stopped after ${maxPages} pages (sinceId=${sinceId}) — backlog is still growing faster than it can be drained.`);
+    return rows;
+  }
+
+
   /** Grouped counts by period (hour|day), optionally filtered — the comparative question path. */
   async queryHistory({ experience, eventType, groupBy = 'day', startDate, endDate } = {}) {
     const bucket = VALID_GROUP_BY.has(groupBy) ? groupBy : 'day';
