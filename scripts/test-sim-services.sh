@@ -133,14 +133,17 @@ sleep 1
 ### ---------- 16. Auth & CORS ----------
 kill "$(cat /tmp/sim-logs/sim.pid)" 2>/dev/null
 sleep 2   # let port 3100 free up before restarting
-SIM_API_KEY=test123 SIM_CORS_ORIGIN='*' nohup node src/sim-service/index.js > /tmp/sim-logs/sim.log 2>&1 &
+# SIM_CORS_ORIGIN is now always an explicit allowlist (no '*' wildcard) —
+# list the one origin this test expects to be allowed, plus the default.
+SIM_API_KEY=test123 SIM_CORS_ORIGIN='http://localhost:4200,http://allowed.example' nohup node src/sim-service/index.js > /tmp/sim-logs/sim.log 2>&1 &
 echo $! > /tmp/sim-logs/sim.pid
 sleep 5   # let it reconnect DB/MQTT before hitting it
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3100/sim/actions/mark-table-cleared \
   -H 'Content-Type: application/json' -d '{"table_ref":"table-4"}'   # expect 401
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3100/sim/actions/mark-table-cleared \
   -H 'Content-Type: application/json' -H 'X-Api-Key: test123' -d '{"table_ref":"table-4"}'   # expect 200
-curl -s -D - -o /dev/null -H 'Origin: http://random-site.example' http://localhost:3100/sim/health | grep -i access-control-allow-origin
+curl -s -D - -o /dev/null -H 'Origin: http://allowed.example' http://localhost:3100/sim/health | grep -i access-control-allow-origin   # expect the header, reflecting this origin
+curl -s -D - -o /dev/null -H 'Origin: http://random-site.example' http://localhost:3100/sim/health | grep -i access-control-allow-origin   # expect no output - not on the allowlist
 sleep 1
 
 ### ---------- 17. Replay mode ----------

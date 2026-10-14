@@ -33,7 +33,7 @@ Same `SOURCE`, `SIM_MODE`, `SIM_SEED`, `SIM_SPEED`, `SIM_BENCHMARK`,
 | `FOOTFALL_SIM_PORT` | `3300` | Port for `/footfall-sim/health`, `/footfall-sim/events/stream`, `/footfall-sim/ingest`. |
 | `FOOTFALL_SIM_DB_NAME` | `CAFE_DB_NAME` or `pos_cafe` | Database `footfall_sim_events` lives in. |
 | `FOOTFALL_SIM_API_KEY` | unset | If set, `POST /footfall-sim/ingest` requires a matching `X-Api-Key` header (401 otherwise). Unset = open. |
-| `FOOTFALL_SIM_CORS_ORIGIN` | `http://localhost:4200` | Comma-separated allowed CORS origins. Set to `*` to allow any origin. |
+| `FOOTFALL_SIM_CORS_ORIGIN` | `http://localhost:4200` | Comma-separated allowed CORS origins. `*` is treated as a literal origin string, not a wildcard — it will never match a real browser Origin, so it effectively disables CORS for any origin. |
 
 ## HTTP surface
 

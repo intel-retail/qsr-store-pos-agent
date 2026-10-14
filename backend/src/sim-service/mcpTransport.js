@@ -132,9 +132,17 @@ async function connectTransport({ name, label, httpPort, tools, handleTool }) {
 
   const port = parseInt(process.env.MCP_HTTP_PORT || httpPort, 10);
   const corsOriginRaw = process.env.MCP_CORS_ORIGIN || 'http://localhost:4200';
-  // '*' is special-cased to `true` (reflect request origin) — same wildcard
-  // convention this contract used with the `cors` package.
-  const corsOrigin = corsOriginRaw === '*' ? true : corsOriginRaw.split(',').map((s) => s.trim());
+  // '*' is treated as a literal origin string to match (never matches a real
+  // browser Origin header), not a wildcard — CORS here is always an explicit,
+  // comma-separated allowlist. (Previously '*' was special-cased to `true`,
+  // reflecting any origin; removed per a CodeQL "permissive CORS" finding on
+  // the equivalent index.js pattern — this endpoint is only ever consumed by
+  // non-browser MCP clients, which ignore CORS entirely, so the narrower
+  // behavior costs nothing in practice.)
+  const corsOrigin = corsOriginRaw.split(',').map((s) => s.trim());
+  if (corsOrigin.includes('*')) {
+    console.error(`[${label}] MCP_CORS_ORIGIN=* no longer allows any origin — list the specific origin(s) to allow instead.`);
+  }
 
   await server.start({
     transportType: 'httpStream',

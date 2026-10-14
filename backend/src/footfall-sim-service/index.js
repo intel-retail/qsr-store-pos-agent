@@ -30,10 +30,17 @@ const SPEED = parseFloat(process.env.SIM_SPEED || '60');
 const PORT = parseInt(process.env.FOOTFALL_SIM_PORT || '3300');
 // Unset by default (open, matching prior behavior) — set to require X-Api-Key on writes.
 const API_KEY = process.env.FOOTFALL_SIM_API_KEY || null;
-// cors treats an array entry of '*' as a literal string to match, not a wildcard —
-// pass `true` (reflect request origin) instead so FOOTFALL_SIM_CORS_ORIGIN=* actually allows all.
+// '*' is treated as a literal origin string to match (never matches a real
+// browser Origin header), not a wildcard — CORS here is always an explicit,
+// comma-separated allowlist. (Previously '*' was special-cased to `true`,
+// reflecting any origin; removed per a CodeQL "permissive CORS" finding —
+// this service is never consumed cross-origin by a non-browser/MCP client,
+// which ignores CORS entirely, so the narrower behavior costs nothing there.)
 const CORS_ORIGIN_RAW = process.env.FOOTFALL_SIM_CORS_ORIGIN || 'http://localhost:4200';
-const CORS_ORIGIN = CORS_ORIGIN_RAW === '*' ? true : CORS_ORIGIN_RAW.split(',').map((s) => s.trim());
+const CORS_ORIGIN = CORS_ORIGIN_RAW.split(',').map((s) => s.trim());
+if (CORS_ORIGIN.includes('*')) {
+  console.error('[footfall-sim-service] FOOTFALL_SIM_CORS_ORIGIN=* no longer allows any origin — list the specific origin(s) to allow instead.');
+}
 
 const FOOTFALL_EVENT_TYPE_DESCRIPTIONS = {
   [EVENT_TYPES.FOOTFALL_COUNT]: 'Number of people observed in a zone during a 15-minute interval.',

@@ -55,7 +55,7 @@ needed on the agent side — same MCP tools, same hub topics/stream.
 | `SIM_DB_NAME` | `CAFE_DB_NAME` or `pos_cafe` | Postgres database the log lives in. |
 | `CAFE_TABLE_COUNT` | `15` | Table count used when generating café schedules. |
 | `SIM_API_KEY` | unset | If set, `POST` routes (`/sim/ingest`, `/sim/actions/*`) require a matching `X-Api-Key` header (401 otherwise). Unset = open, same as before this was added. |
-| `SIM_CORS_ORIGIN` | `http://localhost:4200` | Comma-separated allowed CORS origins. Set to `*` to allow any origin. |
+| `SIM_CORS_ORIGIN` | `http://localhost:4200` | Comma-separated allowed CORS origins. `*` is treated as a literal origin string, not a wildcard — it will never match a real browser Origin, so it effectively disables CORS for any origin. |
 
 ## HTTP surface
 

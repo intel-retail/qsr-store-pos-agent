@@ -44,7 +44,7 @@ Same `SOURCE`, `SIM_MODE`, `SIM_SEED`, `SIM_SPEED`, `SIM_BENCHMARK`,
 | `TABLE_SIM_PORT` | `3200` | Port for `/table-sim/health`, `/table-sim/events/stream`, `/table-sim/ingest`. |
 | `TABLE_SIM_DB_NAME` | `CAFE_DB_NAME` or `pos_cafe` | Database `table_sim_events` lives in. |
 | `TABLE_SIM_API_KEY` | unset | If set, `POST` routes (`/table-sim/ingest`, `/table-sim/actions/*`) require a matching `X-Api-Key` header (401 otherwise). Unset = open. |
-| `TABLE_SIM_CORS_ORIGIN` | `http://localhost:4200` | Comma-separated allowed CORS origins. Set to `*` to allow any origin. |
+| `TABLE_SIM_CORS_ORIGIN` | `http://localhost:4200` | Comma-separated allowed CORS origins. `*` is treated as a literal origin string, not a wildcard — it will never match a real browser Origin, so it effectively disables CORS for any origin. |
 
 ## HTTP surface
 

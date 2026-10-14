@@ -102,14 +102,17 @@ sleep 1
 ### ---------- 11. Auth & CORS (one-off container with env overrides, port 3100 freed first) ----------
 docker compose stop sim-service
 sleep 2
+# SIM_CORS_ORIGIN is now always an explicit allowlist (no '*' wildcard) —
+# list the one origin this test expects to be allowed, plus the default.
 docker compose run -d --rm --service-ports --name sim-service-authtest \
-  -e SIM_API_KEY=test123 -e SIM_CORS_ORIGIN='*' sim-service
+  -e SIM_API_KEY=test123 -e SIM_CORS_ORIGIN='http://localhost:4200,http://allowed.example' sim-service
 sleep 8
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3100/sim/actions/mark-table-cleared \
   -H 'Content-Type: application/json' -d '{"table_ref":"table-4"}'   # expect 401
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3100/sim/actions/mark-table-cleared \
   -H 'Content-Type: application/json' -H 'X-Api-Key: test123' -d '{"table_ref":"table-4"}'   # expect 200
-curl -s -D - -o /dev/null -H 'Origin: http://random-site.example' http://localhost:3100/sim/health | grep -i access-control-allow-origin
+curl -s -D - -o /dev/null -H 'Origin: http://allowed.example' http://localhost:3100/sim/health | grep -i access-control-allow-origin   # expect the header, reflecting this origin
+curl -s -D - -o /dev/null -H 'Origin: http://random-site.example' http://localhost:3100/sim/health | grep -i access-control-allow-origin   # expect no output - not on the allowlist
 docker stop sim-service-authtest 2>/dev/null
 sleep 2
 

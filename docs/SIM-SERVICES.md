@@ -48,8 +48,8 @@ for the full reference): `SOURCE` (`sim`|`real`), `SIM_MODE` (`live`|`replay`),
 
 Each also has its own `*_API_KEY` (optional — if set, requires a matching
 `X-Api-Key` header on mutating routes) and `*_CORS_ORIGIN` (default
-`http://localhost:4200`, comma-separated list, or `*` for any origin) env var
-— e.g. `SIM_API_KEY`/`SIM_CORS_ORIGIN`, `TABLE_SIM_API_KEY`/`TABLE_SIM_CORS_ORIGIN`,
+`http://localhost:4200`, comma-separated list) env var — e.g.
+`SIM_API_KEY`/`SIM_CORS_ORIGIN`, `TABLE_SIM_API_KEY`/`TABLE_SIM_CORS_ORIGIN`,
 `FOOTFALL_SIM_API_KEY`/`FOOTFALL_SIM_CORS_ORIGIN`.
 
 **Via Docker:** all three are wired into [`docker-compose.yml`](../docker-compose.yml)
