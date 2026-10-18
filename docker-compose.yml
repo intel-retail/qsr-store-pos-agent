@@ -81,6 +81,242 @@ services:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
       - mqtt_data:/mosquitto/data
 
+  # Sim Service (headless, deterministic event producer + durable log + hub)
+  # Reuses the backend image — same package.json, no extra deps. See
+  # backend/src/sim-service/SIM-SERVICE.md for the full env var reference.
+  sim-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY
+        - HTTPS_PROXY
+        - NO_PROXY
+    container_name: pos-sim-service
+    restart: unless-stopped
+    command: ["node", "src/sim-service/index.js"]
+    ports:
+      - "3100:3100"
+    environment:
+      SOURCE: ${SIM_SOURCE:-sim}
+      SIM_MODE: ${SIM_MODE:-live}
+      SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
+      SIM_SPEED: ${SIM_SPEED:-60}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      SIM_PORT: 3100
+      SIM_DB_NAME: pos_cafe
+      SIM_API_KEY: ${SIM_API_KEY:-}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      CAFE_TABLE_COUNT: ${CAFE_TABLE_COUNT:-15}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/sim/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Table occupancy & cleaning sim service. Same image as sim-service, own
+  # port/log table. See backend/src/table-sim-service/TABLE-SIM-SERVICE.md.
+  table-sim-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY
+        - HTTPS_PROXY
+        - NO_PROXY
+    container_name: pos-table-sim-service
+    restart: unless-stopped
+    command: ["node", "src/table-sim-service/index.js"]
+    ports:
+      - "3200:3200"
+    environment:
+      SOURCE: ${TABLE_SIM_SOURCE:-sim}
+      SIM_MODE: ${SIM_MODE:-live}
+      SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
+      SIM_SPEED: ${SIM_SPEED:-60}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      TABLE_SIM_PORT: 3200
+      TABLE_SIM_DB_NAME: pos_cafe
+      TABLE_SIM_API_KEY: ${TABLE_SIM_API_KEY:-}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      CAFE_TABLE_COUNT: ${CAFE_TABLE_COUNT:-15}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3200/table-sim/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Footfall/movement sim service (read-only). Same image, own port/log table.
+  # See backend/src/footfall-sim-service/FOOTFALL-SIM-SERVICE.md.
+  footfall-sim-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY
+        - HTTPS_PROXY
+        - NO_PROXY
+    container_name: pos-footfall-sim-service
+    restart: unless-stopped
+    command: ["node", "src/footfall-sim-service/index.js"]
+    ports:
+      - "3300:3300"
+    environment:
+      SOURCE: ${FOOTFALL_SIM_SOURCE:-sim}
+      SIM_MODE: ${SIM_MODE:-live}
+      SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
+      SIM_SPEED: ${SIM_SPEED:-60}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      FOOTFALL_SIM_PORT: 3300
+      FOOTFALL_SIM_DB_NAME: pos_cafe
+      FOOTFALL_SIM_API_KEY: ${FOOTFALL_SIM_API_KEY:-}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3300/footfall-sim/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # MCP servers, streamable-HTTP mode (POST /mcp) — same images/tools as the
+  # stdio MCP servers above, for agent frameworks that register MCP services by
+  # URL rather than by spawning a stdio child process (e.g. intel-retail/qsr-agent's
+  # agent-config/hermes/remote-mcp.yaml). MCP_TRANSPORT=http is the only
+  # difference from running `node src/*/mcp-*-server.js` directly over stdio.
+  sim-service-mcp:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pos-sim-service-mcp
+    restart: unless-stopped
+    command: ["node", "src/sim-service/mcp-sim-server.js"]
+    ports:
+      - "3101:3101"
+    environment:
+      MCP_TRANSPORT: http
+      MCP_HTTP_PORT: 3101
+      MCP_API_KEY: ${MCP_API_KEY:-}
+      SOURCE: ${SIM_SOURCE:-sim}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      SIM_DB_NAME: pos_cafe
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3101/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  table-sim-service-mcp:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pos-table-sim-service-mcp
+    restart: unless-stopped
+    command: ["node", "src/table-sim-service/mcp-table-sim-server.js"]
+    ports:
+      - "3201:3201"
+    environment:
+      MCP_TRANSPORT: http
+      MCP_HTTP_PORT: 3201
+      MCP_API_KEY: ${MCP_API_KEY:-}
+      SOURCE: ${TABLE_SIM_SOURCE:-sim}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      TABLE_SIM_DB_NAME: pos_cafe
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3201/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  footfall-sim-service-mcp:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pos-footfall-sim-service-mcp
+    restart: unless-stopped
+    command: ["node", "src/footfall-sim-service/mcp-footfall-sim-server.js"]
+    ports:
+      - "3301:3301"
+    environment:
+      MCP_TRANSPORT: http
+      MCP_HTTP_PORT: 3301
+      MCP_API_KEY: ${MCP_API_KEY:-}
+      SOURCE: ${FOOTFALL_SIM_SOURCE:-sim}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      FOOTFALL_SIM_DB_NAME: pos_cafe
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3301/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   # GPU Metrics Daemon (system-wide Intel GPU metrics via Prometheus)
   qmmd:
     build:
@@ -103,3 +339,11 @@ services:
 volumes:
   postgres_data:
   mqtt_data:
+
+# Fixed, well-known name so another container/compose project can join this
+# stack's network (e.g. `networks: { edgemart-net: { external: true } }`)
+# instead of only reaching sim-service via its published host port.
+networks:
+  default:
+    name: edgemart-net
+
