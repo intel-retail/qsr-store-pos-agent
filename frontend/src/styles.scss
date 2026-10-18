@@ -58,8 +58,8 @@ body {
   }
 
   .mat-mdc-slide-toggle {
-    --mdc-switch-selected-track-color: var(--accent);
-    --mdc-switch-selected-handle-color: var(--accent);
+    --mat-slide-toggle-selected-track-color: var(--accent);
+    --mat-slide-toggle-selected-handle-color: var(--accent);
 
     .mdc-label, .mdc-switch__icon, mat-icon {
       color: var(--text-primary) !important;
