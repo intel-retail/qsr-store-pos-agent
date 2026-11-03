@@ -131,8 +131,9 @@ Postgres table and don't need to run on the same host.
 ### Headless service, via Docker Compose
 
 Already wired up in the repo's [docker-compose.yml](../../../docker-compose.yml)
-as the `store-activity-service` container: it reuses the existing `backend/Dockerfile`
-image (same `package.json`, no extra deps) with its `command` overridden to
+as the `store-activity-service` container: it builds from the existing `backend/Dockerfile`
+(same `package.json`, no extra deps), tagged `${IMAGE_REGISTRY:-qsr-store-pos-agent}/store-activity-service:${IMAGE_TAG:-latest}`
+and shared with `store-activity-service-mcp`, with its `command` overridden to
 `node src/store-activity-service/index.js`, connects to the same `postgres`/`mqtt`
 containers as `backend`, and publishes port `3100`.
 

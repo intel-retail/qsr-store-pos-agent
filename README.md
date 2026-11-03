@@ -515,6 +515,10 @@ CAFE_TABLE_COUNT=15
 docker compose up --build backend frontend
 ```
 
+### Event Service Images
+
+`store-activity-service`, `table-occupancy-service` and `footfall-service` (each shared with its MCP sidecar) are tagged `${IMAGE_REGISTRY:-qsr-store-pos-agent}/<service>:${IMAGE_TAG:-latest}`. Set `IMAGE_REGISTRY` (lowercase, no trailing slash) and `IMAGE_TAG` in `.env` to build or pull them from a registry; see [docs/STORE-SERVICES.md](docs/STORE-SERVICES.md) for the build and push steps.
+
 ### Stop and Clean Up
 
 ```bash

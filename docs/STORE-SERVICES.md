@@ -57,6 +57,29 @@ Each also has its own `*_API_KEY` (optional — if set, requires a matching
 `SIM_API_KEY`/`SIM_CORS_ORIGIN`, `TABLE_SIM_API_KEY`/`TABLE_SIM_CORS_ORIGIN`,
 `FOOTFALL_SIM_API_KEY`/`FOOTFALL_SIM_CORS_ORIGIN`.
 
+**Container images:** each service and its MCP sidecar share one image, built from
+`backend/Dockerfile` and named `${IMAGE_REGISTRY}/<service>:${IMAGE_TAG}` (defaults:
+`qsr-store-pos-agent/<service>:latest`):
+
+| Service | Image (default name) |
+|---|---|
+| `store-activity-service` | `qsr-store-pos-agent/store-activity-service:latest` |
+| `table-occupancy-service` | `qsr-store-pos-agent/table-occupancy-service:latest` |
+| `footfall-service` | `qsr-store-pos-agent/footfall-service:latest` |
+
+To publish them to a registry, log in, then build and push with a lowercase
+`IMAGE_REGISTRY` that has no trailing slash:
+
+```bash
+export IMAGE_REGISTRY=<registry>/<path> IMAGE_TAG=<tag>
+docker compose build store-activity-service table-occupancy-service footfall-service
+docker compose push store-activity-service table-occupancy-service footfall-service
+```
+
+A host that only pulls the images must set the same `IMAGE_REGISTRY` and `IMAGE_TAG`
+in `.env`. Rebuild with `--build` after code changes; a reused `latest` tag is not
+refreshed by `up` or `--force-recreate`.
+
 **Via Docker:** all three are wired into [`docker-compose.yml`](../docker-compose.yml)
 — `docker compose up -d store-activity-service table-occupancy-service footfall-service`
 (each `depends_on: postgres, mqtt`, so Compose brings those up too). All three
