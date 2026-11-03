@@ -141,6 +141,7 @@ services:
   # backend/src/store-activity-service/STORE-ACTIVITY-SERVICE.md for the full env var reference.
   store-activity-service:
     <<: *hardened
+    image: ${IMAGE_REGISTRY:-qsr-store-pos-agent}/store-activity-service:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -192,6 +193,7 @@ services:
   # backend/src/table-occupancy-service/TABLE-OCCUPANCY-SERVICE.md.
   table-occupancy-service:
     <<: *hardened
+    image: ${IMAGE_REGISTRY:-qsr-store-pos-agent}/table-occupancy-service:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -242,6 +244,7 @@ services:
   # See backend/src/footfall-service/FOOTFALL-SERVICE.md.
   footfall-service:
     <<: *hardened
+    image: ${IMAGE_REGISTRY:-qsr-store-pos-agent}/footfall-service:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -294,9 +297,14 @@ services:
   # difference from running `node src/*/mcp-*-server.js` directly over stdio.
   store-activity-service-mcp:
     <<: *hardened
+    image: ${IMAGE_REGISTRY:-qsr-store-pos-agent}/store-activity-service:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY
+        - HTTPS_PROXY
+        - NO_PROXY
     container_name: pos-store-activity-service-mcp
     restart: unless-stopped
     deploy:
@@ -335,9 +343,14 @@ services:
 
   table-occupancy-service-mcp:
     <<: *hardened
+    image: ${IMAGE_REGISTRY:-qsr-store-pos-agent}/table-occupancy-service:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY
+        - HTTPS_PROXY
+        - NO_PROXY
     container_name: pos-table-occupancy-service-mcp
     restart: unless-stopped
     deploy:
@@ -376,9 +389,14 @@ services:
 
   footfall-service-mcp:
     <<: *hardened
+    image: ${IMAGE_REGISTRY:-qsr-store-pos-agent}/footfall-service:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY
+        - HTTPS_PROXY
+        - NO_PROXY
     container_name: pos-footfall-service-mcp
     restart: unless-stopped
     deploy:
