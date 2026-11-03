@@ -5,6 +5,7 @@
  */
 
 const EventEmitter = require('events');
+const { mqttAuthOptions } = require('../service-common/config');
 
 /**
  * TableStatusService - Subscribes to MQTT topics for vision AI events
@@ -52,6 +53,7 @@ class TableStatusService extends EventEmitter {
 
     try {
       this.client = mqtt.connect(this.brokerUrl, {
+        ...mqttAuthOptions(),
         reconnectPeriod: 5000,
         connectTimeout: 10000,
         clientId: `pos-table-status-${Date.now()}`,

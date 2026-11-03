@@ -1,0 +1,138 @@
+# Copyright (c) 2026 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Fully standalone store-activity-service stack — no dependency on the
+# repo-root docker-compose.yml or any of its containers (postgres/mqtt/backend/
+# frontend/qmmd never start). Its own Postgres + MQTT broker, own volumes.
+#
+# Required secrets (no built-in defaults): set DB_PASSWORD, MQTT_USERNAME and
+# MQTT_PASSWORD in the environment or in an .env file next to this compose file
+# (see the repo-root .env.example).
+#
+# Run from anywhere:
+#   docker compose -f backend/src/store-activity-service/docker-compose.yml up -d
+#
+# NOTE: publishes the same host port (3100) as the store-activity-service block
+# in the repo-root docker-compose.yml. Don't run both at once.
+
+x-mqtt-auth: &mqtt-auth
+  MQTT_USERNAME: ${MQTT_USERNAME:?Set MQTT_USERNAME}
+  MQTT_PASSWORD: ${MQTT_PASSWORD:?Set MQTT_PASSWORD}
+
+services:
+  store-activity-postgres:
+    image: postgres:16-alpine
+    container_name: store-activity-postgres
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      # Database name kept as-is for compatibility with existing deployments.
+      POSTGRES_DB: sim_events
+    # Published on loopback so a host-spawned MCP process (see
+    # STORE-ACTIVITY-SERVICE.md's "Using it from outside any container" section)
+    # can reach it at localhost:5432 without exposing the database to the network.
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - store_activity_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Anonymous access is disabled: the password file is generated at start-up
+  # from MQTT_USERNAME / MQTT_PASSWORD.
+  store-activity-mqtt:
+    image: eclipse-mosquitto:2
+    container_name: store-activity-mqtt
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+    command:
+      - sh
+      - -c
+      - mosquitto_passwd -b -c /mosquitto/passwd "$$MQTT_USERNAME" "$$MQTT_PASSWORD" && (chown mosquitto:mosquitto /mosquitto/passwd 2>/dev/null || true) && exec /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf
+    environment:
+      <<: *mqtt-auth
+    # Published so host-spawned processes (MCP or otherwise) can reach
+    # mqtt://localhost:1883 (authenticate with MQTT_USERNAME / MQTT_PASSWORD).
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ../../../mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - store_activity_mqtt_data:/mosquitto/data
+
+  store-activity-service:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: store-activity-service-standalone
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    command: ["node", "src/store-activity-service/index.js"]
+    ports:
+      - "3100:3100"
+    environment:
+      <<: *mqtt-auth
+      SOURCE: ${SIM_SOURCE:-sim}
+      SIM_MODE: ${SIM_MODE:-live}
+      SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
+      SIM_SPEED: ${SIM_SPEED:-60}
+      SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
+      SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      SIM_PORT: 3100
+      SIM_DB_NAME: sim_events
+      DB_HOST: store-activity-postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      CAFE_TABLE_COUNT: ${CAFE_TABLE_COUNT:-15}
+      MQTT_BROKER_URL: mqtt://store-activity-mqtt:1883
+    depends_on:
+      store-activity-postgres:
+        condition: service_healthy
+      store-activity-mqtt:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/store-activity/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  store_activity_postgres_data:
+  store_activity_mqtt_data:
+
+# Fixed, well-known name so another container/compose project can join this
+# stack's network instead of only reaching store-activity-service via its host port.
+networks:
+  default:
+    name: store-activity-service-net

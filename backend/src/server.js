@@ -23,6 +23,9 @@ const metricsRoutes = require('./routes/metrics');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// One reverse proxy (nginx) sits in front; without this every client shares the proxy's IP in the rate limiters.
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 app.use(cors({
@@ -38,12 +41,19 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Body parsing
-app.use(express.json({ limit: '10mb' }));
+// Body parsing (chat replays up to 50 history turns, so it gets a larger cap; must precede the global parser)
+app.use('/api/chat', express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '100kb' }));
+
+const EXPERIENCES = new Set(['grocery', 'cafe']);
 
 // Experience middleware - extracts experience from header or query
 app.use((req, res, next) => {
-  req.experience = req.headers['x-experience'] || req.query.experience || 'grocery';
+  const experience = req.headers['x-experience'] || req.query.experience || 'grocery';
+  if (typeof experience !== 'string' || !EXPERIENCES.has(experience)) {
+    return res.status(400).json({ error: 'Invalid experience. Must be one of: grocery, cafe' });
+  }
+  req.experience = experience;
   next();
 });
 
@@ -65,8 +75,24 @@ app.get('/api/health', (req, res) => {
 
 // Error handling
 app.use((err, req, res, next) => {
+  // Client errors raised by middleware (e.g. malformed JSON, oversized body) are 4xx, not server failures.
+  if (err.status >= 400 && err.status < 500) {
+    return res.status(err.status).json({
+      error: err.type === 'entity.parse.failed' ? 'Invalid JSON body' : 'Bad request',
+    });
+  }
   console.error(err.stack);
   res.status(500).json({ error: 'Internal server error' });
+});
+
+// Fail fast on unexpected errors so the container supervisor restarts a clean process.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection:', reason);
+  process.exit(1);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  process.exit(1);
 });
 
 app.listen(PORT, () => {

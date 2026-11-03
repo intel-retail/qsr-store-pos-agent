@@ -8,9 +8,37 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const settingsRoutes = require('./settings');
+const { z, guid, money, quantity, idParams, validate, sendError } = require('../validation');
+
+const dateString = z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'must be a valid date');
+
+const listQuery = z.object({
+  source: z.string().trim().min(1).max(20).optional(),
+  status: z.string().trim().min(1).max(20).optional(),
+  from: dateString.optional(),
+  to: dateString.optional(),
+  limit: z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().min(1).max(1000)).optional(),
+});
+
+const createBody = z.object({
+  staff_id: guid.nullish(),
+  customer_id: guid.nullish(),
+  items: z
+    .array(
+      z.object({
+        product_id: guid,
+        quantity,
+        discount: money.nullish(),
+      })
+    )
+    .min(1, 'Transaction must have at least one item')
+    .max(200),
+  payment_method: z.string().trim().min(1).max(50).nullish(),
+  source: z.string().trim().min(1).max(20).nullish(),
+});
 
 // GET all transactions
-router.get('/', async (req, res) => {
+router.get('/', validate({ query: listQuery }), async (req, res) => {
   try {
     const { source, status, from, to, limit } = req.query;
     let query = `
@@ -49,13 +77,12 @@ router.get('/', async (req, res) => {
     const result = await db.query(query, params, req.experience);
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch transactions' });
+    sendError(res, err, 'Failed to fetch transactions');
   }
 });
 
 // GET single transaction with items
-router.get('/:id', async (req, res) => {
+router.get('/:id', validate({ params: idParams }), async (req, res) => {
   try {
     const transaction = await db.query(
       `SELECT t.*, s.name as staff_name, c.name as customer_name
@@ -81,22 +108,18 @@ router.get('/:id', async (req, res) => {
 
     res.json({ ...transaction.rows[0], items: items.rows });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch transaction' });
+    sendError(res, err, 'Failed to fetch transaction');
   }
 });
 
 // POST create transaction
-router.post('/', async (req, res) => {
-  const client = await db.getClient(req.experience);
+router.post('/', validate({ body: createBody }), async (req, res) => {
+  let client;
   try {
+    client = await db.getClient(req.experience);
     await client.query('BEGIN');
 
     const { staff_id, customer_id, items, payment_method, source } = req.body;
-
-    if (!items || items.length === 0) {
-      return res.status(400).json({ error: 'Transaction must have at least one item' });
-    }
 
     // Generate transaction number
     const txnNumber = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
@@ -106,7 +129,7 @@ router.post('/', async (req, res) => {
     const processedItems = [];
 
     for (const item of items) {
-      const product = await client.query('SELECT * FROM products WHERE id = $1', [item.product_id]);
+      const product = await client.query('SELECT * FROM products WHERE id = $1 FOR UPDATE', [item.product_id]);
       if (product.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: `Product ${item.product_id} not found` });
@@ -124,6 +147,11 @@ router.post('/', async (req, res) => {
       }
 
       const itemTotal = (unitPrice * quantity) - discount;
+
+      if (itemTotal < 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Discount exceeds the line total for ${product.rows[0].name}` });
+      }
 
       subtotal += itemTotal;
       processedItems.push({
@@ -171,11 +199,10 @@ router.post('/', async (req, res) => {
     await client.query('COMMIT');
     res.status(201).json(txnResult.rows[0]);
   } catch (err) {
-    await client.query('ROLLBACK');
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create transaction' });
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    sendError(res, err, 'Failed to create transaction');
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
@@ -196,8 +223,7 @@ router.get('/stats/summary', async (req, res) => {
 
     res.json(stats.rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch stats' });
+    sendError(res, err, 'Failed to fetch stats');
   }
 });
 

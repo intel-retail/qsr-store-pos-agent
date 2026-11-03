@@ -7,9 +7,47 @@
 const express = require('express');
 const router = express.Router();
 const { getTableStatusService } = require('../services/table-status');
+const { z, validate } = require('../validation');
 
 const HERMES_GATEWAY_URL = process.env.HERMES_GATEWAY_URL || 'http://localhost:3001';
-const HERMES_API_KEY = process.env.HERMES_API_KEY || 'change-me-local-dev';
+const HERMES_API_KEY = process.env.HERMES_API_KEY || '';
+if (!HERMES_API_KEY) {
+  console.warn('[Chat] HERMES_API_KEY is not set; requests to the Hermes gateway will be unauthenticated.');
+}
+
+const MAX_MESSAGE_LENGTH = 10000;
+const MAX_HISTORY_MESSAGES = 50;
+const MAX_HISTORY_CONTENT = 20000;
+
+// Only user/assistant turns may be replayed from the client; a client-supplied "system" turn would override the agent's instructions.
+const chatBody = z.object({
+  message: z.string().trim().min(1, 'Message is required').max(MAX_MESSAGE_LENGTH, `Message too long (max ${MAX_MESSAGE_LENGTH} chars)`),
+  conversationId: z.string().max(128).nullish(),
+  context: z
+    .object({
+      history: z
+        // Clamp rather than reject: one oversized past reply must not make every later message in the conversation fail.
+        .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().transform((s) => s.slice(0, MAX_HISTORY_CONTENT)) }))
+        .transform((h) => h.slice(-MAX_HISTORY_MESSAGES))
+        .optional(),
+    })
+    .nullish(),
+});
+
+const tableId = z.string().regex(/^[A-Za-z0-9_-]{1,50}$/, 'invalid table id');
+const tableEventName = z.enum(['occupied', 'dirty', 'cleared', 'clean']);
+const tableEvent = z.object({
+  tableId,
+  event: tableEventName,
+  source: z.string().trim().min(1).max(50).nullish(),
+  metadata: z
+    .record(z.string(), z.unknown())
+    .refine((m) => JSON.stringify(m).length <= 4096, 'metadata too large')
+    .nullish(),
+});
+const tableEventBody = tableEvent;
+const tableBatchBody = z.object({ events: z.array(tableEvent).min(1).max(200) });
+const tableIdParams = z.object({ id: tableId });
 
 // Initialize table status service (connects to MQTT on first use)
 let tableServiceInitialized = false;
@@ -27,16 +65,8 @@ function ensureTableService() {
  * Send a message to the Hermes agent gateway and stream the response back via SSE.
  * Body: { message: string, conversationId?: string, context?: object }
  */
-router.post('/', async (req, res) => {
+router.post('/', validate({ body: chatBody }), async (req, res) => {
   const { message, conversationId, context } = req.body;
-
-  if (!message || typeof message !== 'string' || message.trim().length === 0) {
-    return res.status(400).json({ error: 'Message is required' });
-  }
-
-  if (message.length > 10000) {
-    return res.status(400).json({ error: 'Message too long (max 10000 chars)' });
-  }
 
   // Set up SSE headers for streaming
   res.setHeader('Content-Type', 'text/event-stream');
@@ -170,16 +200,8 @@ router.post('/', async (req, res) => {
  * POST /api/chat/message (non-streaming fallback)
  * For clients that don't support SSE.
  */
-router.post('/message', async (req, res) => {
+router.post('/message', validate({ body: chatBody }), async (req, res) => {
   const { message, conversationId, context } = req.body;
-
-  if (!message || typeof message !== 'string' || message.trim().length === 0) {
-    return res.status(400).json({ error: 'Message is required' });
-  }
-
-  if (message.length > 10000) {
-    return res.status(400).json({ error: 'Message too long (max 10000 chars)' });
-  }
 
   try {
     const response = await fetch(`${HERMES_GATEWAY_URL}/v1/chat/completions`, {
@@ -271,7 +293,7 @@ router.get('/tables/dirty', (req, res) => {
  * POST /api/chat/tables/:id/clear
  * Mark a table as cleared via REST (alternative to agent tool call).
  */
-router.post('/tables/:id/clear', (req, res) => {
+router.post('/tables/:id/clear', validate({ params: tableIdParams }), (req, res) => {
   ensureTableService();
   const tableService = getTableStatusService();
   const tableId = req.params.id;
@@ -285,19 +307,10 @@ router.post('/tables/:id/clear', (req, res) => {
  * This endpoint acts as a stand-in for the external vision AI system.
  * Body: { tableId: string, event: 'occupied'|'dirty'|'cleared', source?: string, metadata?: object }
  */
-router.post('/tables/event', (req, res) => {
+router.post('/tables/event', validate({ body: tableEventBody }), (req, res) => {
   ensureTableService();
   const tableService = getTableStatusService();
   const { tableId, event, source, metadata } = req.body;
-
-  if (!tableId || !event) {
-    return res.status(400).json({ error: 'tableId and event are required' });
-  }
-
-  const validEvents = ['occupied', 'dirty', 'cleared', 'clean'];
-  if (!validEvents.includes(event)) {
-    return res.status(400).json({ error: `Invalid event. Must be one of: ${validEvents.join(', ')}` });
-  }
 
   tableService.updateTable(tableId, event, source || 'simulator-vision', metadata || {});
   res.json({ success: true, tableId, event, timestamp: new Date().toISOString() });
@@ -308,21 +321,15 @@ router.post('/tables/event', (req, res) => {
  * Receive multiple simulated vision events at once.
  * Body: { events: [{ tableId, event, source?, metadata? }] }
  */
-router.post('/tables/events/batch', (req, res) => {
+router.post('/tables/events/batch', validate({ body: tableBatchBody }), (req, res) => {
   ensureTableService();
   const tableService = getTableStatusService();
   const { events } = req.body;
 
-  if (!Array.isArray(events) || events.length === 0) {
-    return res.status(400).json({ error: 'events array is required' });
-  }
-
   const results = [];
   for (const evt of events) {
-    if (evt.tableId && evt.event) {
-      tableService.updateTable(evt.tableId, evt.event, evt.source || 'simulator-vision', evt.metadata || {});
-      results.push({ tableId: evt.tableId, event: evt.event, success: true });
-    }
+    tableService.updateTable(evt.tableId, evt.event, evt.source || 'simulator-vision', evt.metadata || {});
+    results.push({ tableId: evt.tableId, event: evt.event, success: true });
   }
   res.json({ success: true, processed: results.length, results });
 });

@@ -1,19 +1,44 @@
+# Required secrets (no built-in defaults): copy .env.example to .env and set
+# DB_PASSWORD, HERMES_API_KEY, MQTT_USERNAME and MQTT_PASSWORD before `docker compose up`.
+
+# Hardening shared by the application containers (no secrets, nothing written at runtime).
+x-hardened: &hardened
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  read_only: true
+  tmpfs:
+    - /tmp
+
+x-mqtt-auth: &mqtt-auth
+  MQTT_USERNAME: ${MQTT_USERNAME:?Set MQTT_USERNAME in .env (see .env.example)}
+  MQTT_PASSWORD: ${MQTT_PASSWORD:?Set MQTT_PASSWORD in .env (see .env.example)}
+
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database (published on loopback only; containers reach it via the compose network)
   postgres:
     image: postgres:16-alpine
     container_name: pos-postgres
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env (see .env.example)}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init-db.sh:/docker-entrypoint-initdb.d/00-init-db.sh
-      - ./database/grocery/schema.sql:/docker-entrypoint-initdb.d/grocery-schema.sql
-      - ./database/cafe/schema.sql:/docker-entrypoint-initdb.d/cafe-schema.sql
+      # Subdirectory: the image only auto-runs top-level files, and init-db.sh applies these to their own databases.
+      - ./database/grocery/schema.sql:/docker-entrypoint-initdb.d/schemas/grocery-schema.sql
+      - ./database/cafe/schema.sql:/docker-entrypoint-initdb.d/schemas/cafe-schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -22,23 +47,30 @@ services:
 
   # Backend API
   backend:
+    <<: *hardened
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: pos-backend
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
     ports:
       - "3000:3000"
     environment:
+      <<: *mqtt-auth
       PORT: 3000
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
-      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env (see .env.example)}
       GROCERY_DB_NAME: pos_grocery
       CAFE_DB_NAME: pos_cafe
       CAFE_TABLE_COUNT: ${CAFE_TABLE_COUNT:-15}
-      HERMES_API_KEY: ${HERMES_API_KEY:-change-me-local-dev}
+      HERMES_API_KEY: ${HERMES_API_KEY:?Set HERMES_API_KEY in .env (see .env.example)}
       HERMES_GATEWAY_URL: ${HERMES_GATEWAY_URL:-http://host.docker.internal:3001}
       MQTT_BROKER_URL: mqtt://mqtt:1883
       QMMD_URL: http://host.docker.internal:9101
@@ -63,28 +95,52 @@ services:
       dockerfile: Dockerfile
     container_name: pos-frontend
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
     ports:
       - "80:80"
     depends_on:
       backend:
         condition: service_healthy
 
-  # MQTT Broker (for table status events)
+  # MQTT Broker (for table status events). Anonymous access is disabled: the
+  # password file is generated at start-up from MQTT_USERNAME / MQTT_PASSWORD.
   mqtt:
     image: eclipse-mosquitto:2
     container_name: pos-mqtt
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+    command:
+      - sh
+      - -c
+      - mosquitto_passwd -b -c /mosquitto/passwd "$$MQTT_USERNAME" "$$MQTT_PASSWORD" && (chown mosquitto:mosquitto /mosquitto/passwd 2>/dev/null || true) && exec /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf
+    environment:
+      <<: *mqtt-auth
     ports:
       - "1883:1883"
       - "9001:9001"
     volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mqtt_data:/mosquitto/data
 
-  # Sim Service (headless, deterministic event producer + durable log + hub)
+  # Store Activity Service (headless, deterministic event producer + durable log + hub)
   # Reuses the backend image — same package.json, no extra deps. See
-  # backend/src/sim-service/SIM-SERVICE.md for the full env var reference.
-  sim-service:
+  # backend/src/store-activity-service/STORE-ACTIVITY-SERVICE.md for the full env var reference.
+  store-activity-service:
+    <<: *hardened
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -92,12 +148,18 @@ services:
         - HTTP_PROXY
         - HTTPS_PROXY
         - NO_PROXY
-    container_name: pos-sim-service
+    container_name: pos-store-activity-service
     restart: unless-stopped
-    command: ["node", "src/sim-service/index.js"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    command: ["node", "src/store-activity-service/index.js"]
     ports:
       - "3100:3100"
     environment:
+      <<: *mqtt-auth
       SOURCE: ${SIM_SOURCE:-sim}
       SIM_MODE: ${SIM_MODE:-live}
       SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
@@ -110,7 +172,7 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
-      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env (see .env.example)}
       CAFE_TABLE_COUNT: ${CAFE_TABLE_COUNT:-15}
       MQTT_BROKER_URL: mqtt://mqtt:1883
     depends_on:
@@ -119,15 +181,17 @@ services:
       mqtt:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/sim/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/store-activity/health"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 10s
 
-  # Table occupancy & cleaning sim service. Same image as sim-service, own
-  # port/log table. See backend/src/table-sim-service/TABLE-SIM-SERVICE.md.
-  table-sim-service:
+  # Table occupancy & cleaning service. Same image as the store activity
+  # service, own port/log table. See
+  # backend/src/table-occupancy-service/TABLE-OCCUPANCY-SERVICE.md.
+  table-occupancy-service:
+    <<: *hardened
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -135,12 +199,18 @@ services:
         - HTTP_PROXY
         - HTTPS_PROXY
         - NO_PROXY
-    container_name: pos-table-sim-service
+    container_name: pos-table-occupancy-service
     restart: unless-stopped
-    command: ["node", "src/table-sim-service/index.js"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    command: ["node", "src/table-occupancy-service/index.js"]
     ports:
       - "3200:3200"
     environment:
+      <<: *mqtt-auth
       SOURCE: ${TABLE_SIM_SOURCE:-sim}
       SIM_MODE: ${SIM_MODE:-live}
       SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
@@ -153,7 +223,7 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
-      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env (see .env.example)}
       CAFE_TABLE_COUNT: ${CAFE_TABLE_COUNT:-15}
       MQTT_BROKER_URL: mqtt://mqtt:1883
     depends_on:
@@ -162,15 +232,16 @@ services:
       mqtt:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3200/table-sim/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3200/table-occupancy/health"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 10s
 
-  # Footfall/movement sim service (read-only). Same image, own port/log table.
-  # See backend/src/footfall-sim-service/FOOTFALL-SIM-SERVICE.md.
-  footfall-sim-service:
+  # Footfall service (read-only). Same image, own port/log table.
+  # See backend/src/footfall-service/FOOTFALL-SERVICE.md.
+  footfall-service:
+    <<: *hardened
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -178,12 +249,18 @@ services:
         - HTTP_PROXY
         - HTTPS_PROXY
         - NO_PROXY
-    container_name: pos-footfall-sim-service
+    container_name: pos-footfall-service
     restart: unless-stopped
-    command: ["node", "src/footfall-sim-service/index.js"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    command: ["node", "src/footfall-service/index.js"]
     ports:
       - "3300:3300"
     environment:
+      <<: *mqtt-auth
       SOURCE: ${FOOTFALL_SIM_SOURCE:-sim}
       SIM_MODE: ${SIM_MODE:-live}
       SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
@@ -196,7 +273,7 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
-      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env (see .env.example)}
       MQTT_BROKER_URL: mqtt://mqtt:1883
     depends_on:
       postgres:
@@ -204,7 +281,7 @@ services:
       mqtt:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3300/footfall-sim/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3300/footfall/health"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -215,16 +292,23 @@ services:
   # URL rather than by spawning a stdio child process (e.g. intel-retail/qsr-agent's
   # agent-config/hermes/remote-mcp.yaml). MCP_TRANSPORT=http is the only
   # difference from running `node src/*/mcp-*-server.js` directly over stdio.
-  sim-service-mcp:
+  store-activity-service-mcp:
+    <<: *hardened
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: pos-sim-service-mcp
+    container_name: pos-store-activity-service-mcp
     restart: unless-stopped
-    command: ["node", "src/sim-service/mcp-sim-server.js"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    command: ["node", "src/store-activity-service/mcp-store-activity-server.js"]
     ports:
       - "3101:3101"
     environment:
+      <<: *mqtt-auth
       MCP_TRANSPORT: http
       MCP_HTTP_PORT: 3101
       MCP_API_KEY: ${MCP_API_KEY:-}
@@ -235,7 +319,7 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
-      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env (see .env.example)}
       MQTT_BROKER_URL: mqtt://mqtt:1883
     depends_on:
       postgres:
@@ -249,16 +333,23 @@ services:
       retries: 3
       start_period: 10s
 
-  table-sim-service-mcp:
+  table-occupancy-service-mcp:
+    <<: *hardened
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: pos-table-sim-service-mcp
+    container_name: pos-table-occupancy-service-mcp
     restart: unless-stopped
-    command: ["node", "src/table-sim-service/mcp-table-sim-server.js"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    command: ["node", "src/table-occupancy-service/mcp-table-occupancy-server.js"]
     ports:
       - "3201:3201"
     environment:
+      <<: *mqtt-auth
       MCP_TRANSPORT: http
       MCP_HTTP_PORT: 3201
       MCP_API_KEY: ${MCP_API_KEY:-}
@@ -269,7 +360,7 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
-      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env (see .env.example)}
       MQTT_BROKER_URL: mqtt://mqtt:1883
     depends_on:
       postgres:
@@ -283,16 +374,23 @@ services:
       retries: 3
       start_period: 10s
 
-  footfall-sim-service-mcp:
+  footfall-service-mcp:
+    <<: *hardened
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: pos-footfall-sim-service-mcp
+    container_name: pos-footfall-service-mcp
     restart: unless-stopped
-    command: ["node", "src/footfall-sim-service/mcp-footfall-sim-server.js"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    command: ["node", "src/footfall-service/mcp-footfall-server.js"]
     ports:
       - "3301:3301"
     environment:
+      <<: *mqtt-auth
       MCP_TRANSPORT: http
       MCP_HTTP_PORT: 3301
       MCP_API_KEY: ${MCP_API_KEY:-}
@@ -303,7 +401,7 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
-      DB_PASSWORD: ${DB_PASSWORD:-posdev2024}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env (see .env.example)}
       MQTT_BROKER_URL: mqtt://mqtt:1883
     depends_on:
       postgres:
@@ -317,22 +415,37 @@ services:
       retries: 3
       start_period: 10s
 
-  # GPU Metrics Daemon (system-wide Intel GPU metrics via Prometheus)
+  # GPU Metrics Daemon (system-wide Intel GPU metrics via Prometheus).
+  # Runs unprivileged: only the DRM device node is passed through, host
+  # /sys, /proc and /run are read-only, and all capabilities are dropped.
+  # The backend reaches it through the published port (QMMD_URL above).
+  # If GPU access is denied, make sure the container user can open
+  # /dev/dri/renderD*: group_add accepts a numeric GID, e.g. the host's
+  # `render` group (`getent group render`).
   qmmd:
     build:
       context: ./qmmd
       dockerfile: Dockerfile
     container_name: pos-qmmd
     restart: unless-stopped
-    privileged: true
-    pid: host
-    network_mode: host
     security_opt:
-      - apparmor:unconfined
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+    ports:
+      - "9101:9101"
     devices:
       - "/dev/dri:/dev/dri"
+    group_add:
+      - video
     volumes:
-      - /sys:/sys
+      - /sys:/sys:ro
       - /proc:/proc:ro
       - /run:/run:ro
 
@@ -342,8 +455,7 @@ volumes:
 
 # Fixed, well-known name so another container/compose project can join this
 # stack's network (e.g. `networks: { edgemart-net: { external: true } }`)
-# instead of only reaching sim-service via its published host port.
+# instead of only reaching store-activity-service via its published host port.
 networks:
   default:
     name: edgemart-net
-

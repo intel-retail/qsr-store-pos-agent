@@ -27,13 +27,15 @@
       "description": "Real-time table status tracking via MQTT vision events",
       "env": {
         "MQTT_BROKER_URL": "mqtt://localhost:1883",
+        "MQTT_USERNAME": "",
+        "MQTT_PASSWORD": "",
         "CAFE_TABLE_COUNT": "15"
       }
     },
-    "edgemart-sim-service": {
+    "store-activity-service": {
       "command": "node",
-      "args": ["backend/src/sim-service/mcp-sim-server.js"],
-      "description": "Sim service describe/read/act contract: event history, baseline comparison, current table/queue snapshot, and table/inject actions",
+      "args": ["backend/src/store-activity-service/mcp-store-activity-server.js"],
+      "description": "Store activity service describe/read/act contract: event history, baseline comparison, current table/queue snapshot, and table/inject actions",
       "env": {
         "DB_HOST": "localhost",
         "DB_PORT": "5432",
@@ -43,13 +45,15 @@
         "SOURCE": "sim",
         "SIM_EXPERIENCE": "cafe",
         "SIM_BENCHMARK": "0",
-        "MQTT_BROKER_URL": "mqtt://localhost:1883"
+        "MQTT_BROKER_URL": "mqtt://localhost:1883",
+        "MQTT_USERNAME": "",
+        "MQTT_PASSWORD": ""
       }
     },
-    "edgemart-table-sim-service": {
+    "table-occupancy-service": {
       "command": "node",
-      "args": ["backend/src/table-sim-service/mcp-table-sim-server.js"],
-      "description": "Table occupancy & cleaning sim service: utilization, dirty-duration stats, per-table history, and mark_table_cleared/mark_table_occupied actions",
+      "args": ["backend/src/table-occupancy-service/mcp-table-occupancy-server.js"],
+      "description": "Table occupancy & cleaning service: utilization, dirty-duration stats, per-table history, and mark_table_cleared/mark_table_occupied actions",
       "env": {
         "DB_HOST": "localhost",
         "DB_PORT": "5432",
@@ -59,13 +63,15 @@
         "SOURCE": "sim",
         "SIM_EXPERIENCE": "cafe",
         "SIM_BENCHMARK": "0",
-        "MQTT_BROKER_URL": "mqtt://localhost:1883"
+        "MQTT_BROKER_URL": "mqtt://localhost:1883",
+        "MQTT_USERNAME": "",
+        "MQTT_PASSWORD": ""
       }
     },
-    "edgemart-footfall-sim-service": {
+    "footfall-service": {
       "command": "node",
-      "args": ["backend/src/footfall-sim-service/mcp-footfall-sim-server.js"],
-      "description": "Footfall/movement sim service: total footfall and busy-time patterns by zone (read-only, no actions)",
+      "args": ["backend/src/footfall-service/mcp-footfall-server.js"],
+      "description": "Footfall service: total footfall and busy-time patterns by zone (read-only, no actions)",
       "env": {
         "DB_HOST": "localhost",
         "DB_PORT": "5432",
@@ -75,7 +81,9 @@
         "SOURCE": "sim",
         "SIM_EXPERIENCE": "cafe",
         "SIM_BENCHMARK": "0",
-        "MQTT_BROKER_URL": "mqtt://localhost:1883"
+        "MQTT_BROKER_URL": "mqtt://localhost:1883",
+        "MQTT_USERNAME": "",
+        "MQTT_PASSWORD": ""
       }
     },
     "vision-ai": {

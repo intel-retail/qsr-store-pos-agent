@@ -2,6 +2,10 @@
 
 A complete Point-of-Sale system with dual experiences (**Grocery** and **Café**), 3D floor simulators, an MCP server for agentic LLM integration, and an **Agent Chat** powered by [Hermes Gateway](https://github.com/nousresearch/hermes-agent) with real-time table tracking via MQTT.
 
+## **Intended Use**
+
+Unless stated otherwise, software maintained under the Edge AI Libraries repository is intended for demonstration and reference purposes only. Certain features, such as authentication, TLS termination, and external access controls are assumed to be covered at the infrastructure level. For more information, refer to [Notes on Usage](https://docs.openedgeplatform.intel.com/dev/OEP-articles/notes-on-usage.html).
+
 ## Experiences
 
 Switch between experiences from the toolbar toggle. Each experience has its own database, products, simulation model, and visual layout.
@@ -145,6 +149,8 @@ sudo systemctl enable --now mosquitto
 docker run -d --name mosquitto -p 1883:1883 eclipse-mosquitto:2
 ```
 
+> The repo's `mosquitto.conf` disables anonymous access (`allow_anonymous false`). With Docker Compose the password file is generated from `MQTT_USERNAME` / `MQTT_PASSWORD`. For a native or standalone broker, create the account yourself (`mosquitto_passwd -c /etc/mosquitto/passwd <user>`), add `allow_anonymous false` and `password_file /etc/mosquitto/passwd` to the broker config, and pass `-u <user> -P <password>` to `mosquitto_sub` / `mosquitto_pub` below.
+
 ### Verify
 ```bash
 # In one terminal, subscribe:
@@ -158,6 +164,8 @@ mosquitto_pub -t "cafe/vision/events" -m '{"tableId":"table-3","event":"dirty","
 Add to `backend/.env`:
 ```env
 MQTT_BROKER_URL=mqtt://localhost:1883
+MQTT_USERNAME=<broker-username>   # omit both only for a local anonymous broker
+MQTT_PASSWORD=<broker-password>
 CAFE_TABLE_COUNT=15
 ```
 
@@ -243,6 +251,8 @@ mcp_servers:
       - /path/to/pos-simulator/backend/src/mcp-table-status.js
     env:
       MQTT_BROKER_URL: mqtt://localhost:1883
+      MQTT_USERNAME: <your MQTT_USERNAME>
+      MQTT_PASSWORD: <your MQTT_PASSWORD>
       CAFE_TABLE_COUNT: "15"
 ```
 
@@ -263,7 +273,7 @@ Add to `~/.hermes/.env`:
 API_SERVER_ENABLED=true
 API_SERVER_PORT=3001
 API_SERVER_HOST=0.0.0.0
-API_SERVER_KEY=change-me-local-dev
+API_SERVER_KEY=<generate-a-long-random-secret>
 ```
 
 > **Note:** `API_SERVER_HOST=0.0.0.0` is required when running the POS stack in Docker so the backend container can reach Hermes on the host via the Docker bridge network. Use `127.0.0.1` only if running everything natively without Docker.
@@ -332,7 +342,7 @@ hermes gateway run
 Add to `backend/.env`:
 ```env
 HERMES_GATEWAY_URL=http://localhost:3001
-HERMES_API_KEY=change-me-local-dev
+HERMES_API_KEY=<same-secret-as-API_SERVER_KEY>
 ```
 
 The backend proxies to the API server's OpenAI-compatible endpoints:
@@ -468,7 +478,10 @@ Run the entire stack (frontend, backend, PostgreSQL, MQTT, GPU metrics) in conta
 
 ### Start All Services
 
+Compose has no built-in secrets. Copy `.env.example` to `.env` and set `DB_PASSWORD`, `HERMES_API_KEY`, `MQTT_USERNAME` and `MQTT_PASSWORD` first — `docker compose` refuses to start while any of them is unset.
+
 ```bash
+cp .env.example .env   # then edit the four required values
 docker compose up --build
 ```
 
@@ -478,20 +491,22 @@ docker compose up --build
 |---------|-----------|------|-------------|
 | `frontend` | pos-frontend | **80** | Angular UI + nginx reverse proxy |
 | `backend` | pos-backend | 3000 | Express API + metrics SSE |
-| `postgres` | pos-postgres | 5432 | Dual databases (pos_grocery, pos_cafe) |
-| `mqtt` | pos-mqtt | 1883, 9001 | MQTT broker (TCP + WebSocket) |
+| `postgres` | pos-postgres | 5432 (loopback only) | Dual databases (pos_grocery, pos_cafe) |
+| `mqtt` | pos-mqtt | 1883, 9001 | MQTT broker (TCP + WebSocket, authenticated) |
 | `qmmd` | pos-qmmd | 9101 | Intel GPU metrics (Prometheus endpoint) |
 
 Open http://localhost after startup.
 
 ### Docker Compose Environment
 
-Configure via `.env` in the project root (or export variables):
+Configure via `.env` in the project root (see `.env.example`; the first four values are required):
 
 ```env
-DB_PASSWORD=posdev2024
+DB_PASSWORD=<long-random-password>
+HERMES_API_KEY=<long-random-secret>
+MQTT_USERNAME=<broker-username>
+MQTT_PASSWORD=<broker-password>
 CAFE_TABLE_COUNT=15
-HERMES_API_KEY=change-me-local-dev
 ```
 
 ### Rebuild After Code Changes
@@ -532,7 +547,7 @@ mcp_servers:
     env:
       DB_HOST: localhost
       DB_PORT: "5432"
-      DB_PASSWORD: "posdev2024"
+      DB_PASSWORD: "<your DB_PASSWORD>"
       MCP_DB_NAME: pos_cafe
 
   edgemart-table-status:
@@ -540,12 +555,14 @@ mcp_servers:
     args: ["/path/to/pos-simulator/backend/src/mcp-table-status.js"]
     env:
       MQTT_BROKER_URL: "mqtt://localhost:1883"
+      MQTT_USERNAME: "<your MQTT_USERNAME>"
+      MQTT_PASSWORD: "<your MQTT_PASSWORD>"
       CAFE_TABLE_COUNT: "15"
 ```
 
 ### GPU Metrics in Docker
 
-The `qmmd` container runs [qmmd](https://github.com/ulissesf/qmassa) (Prometheus daemon from the qmassa project) with `privileged: true`, host PID namespace, and host networking. It exposes Intel GPU metrics on port 9101 which the backend scrapes every second.
+The `qmmd` container runs [qmmd](https://github.com/ulissesf/qmassa) (Prometheus daemon from the qmassa project) with no extra privileges: no `privileged` mode, no host PID/network namespaces, all capabilities dropped, a read-only root filesystem, and only `/dev/dri` passed through (host `/sys`, `/proc` and `/run` are mounted read-only). It publishes Intel GPU metrics on port 9101, which the backend scrapes every second. If the GPU section stays empty, check `curl http://localhost:9101/metrics` and that the container user can open `/dev/dri/renderD*` (add the host `render` GID under `group_add`).
 
 The backend's `/api/metrics/stream` SSE endpoint collects:
 - **CPU/Memory** — natively via Node.js `os` module
@@ -558,7 +575,7 @@ The backend's `/api/metrics/stream` SSE endpoint collects:
 
 The system metrics panel uses [qmmd](https://github.com/ulissesf/qmassa) (a Prometheus daemon from the qmassa project) to read Intel GPU engine utilization, frequency, power, and temperature.
 
-In Docker, qmmd runs as a dedicated container with host networking and PID namespace. For local development you can run it manually.
+In Docker, qmmd runs as a dedicated unprivileged container (see above). For local development you can run it manually.
 
 ### Install qmmd (Manual / Non-Docker)
 
@@ -616,6 +633,7 @@ curl http://localhost:9101/metrics
 | `CAFE_DB_NAME` | `pos_cafe` | Café database name |
 | `MCP_DB_NAME` | (uses GROCERY_DB_NAME) | MCP server target DB |
 | `MQTT_BROKER_URL` | `mqtt://localhost:1883` | MQTT broker connection string |
+| `MQTT_USERNAME` / `MQTT_PASSWORD` | — | MQTT broker credentials (required by the Docker stack) |
 | `CAFE_TABLE_COUNT` | `15` | Number of tracked tables (9 floor + 6 bar) |
 | `HERMES_GATEWAY_URL` | `http://localhost:3001` | Hermes agent gateway URL |
 | `QMMD_URL` | `http://qmmd:9101` | qmmd GPU metrics endpoint |

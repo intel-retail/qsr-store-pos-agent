@@ -8,7 +8,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
 EOSQL
 
 # Initialize grocery database
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname pos_grocery < /docker-entrypoint-initdb.d/grocery-schema.sql
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname pos_grocery < /docker-entrypoint-initdb.d/schemas/grocery-schema.sql
 
 # Initialize cafe database
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname pos_cafe < /docker-entrypoint-initdb.d/cafe-schema.sql
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname pos_cafe < /docker-entrypoint-initdb.d/schemas/cafe-schema.sql
