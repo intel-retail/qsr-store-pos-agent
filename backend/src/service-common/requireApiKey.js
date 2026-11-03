@@ -9,16 +9,17 @@
 
 const crypto = require('crypto');
 
-// Per-process random key: both values are MACed with it so the compared
-// buffers always have the same length. This is not password storage.
-const MAC_KEY = crypto.randomBytes(32);
-
-/** Constant-time string comparison (MACs first so unequal lengths don't leak through timing). */
+/** Constant-time string comparison (zero-pads to equal length, then checks the real lengths match). */
 function secretsMatch(provided, expected) {
   if (typeof provided !== 'string' || typeof expected !== 'string') return false;
-  const a = crypto.createHmac('sha256', MAC_KEY).update(provided).digest();
-  const b = crypto.createHmac('sha256', MAC_KEY).update(expected).digest();
-  return crypto.timingSafeEqual(a, b);
+  const a = Buffer.from(provided, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  const len = Math.max(a.length, b.length, 1);
+  const padA = Buffer.alloc(len);
+  const padB = Buffer.alloc(len);
+  a.copy(padA);
+  b.copy(padB);
+  return crypto.timingSafeEqual(padA, padB) && a.length === b.length;
 }
 
 /**
