@@ -8,11 +8,21 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const settingsRoutes = require('./settings');
+const { z, validate, sendError } = require('../validation');
+
+const generateBody = z.object({
+  order_type: z.enum(['dine-in', 'takeout']).optional(),
+});
+
+const toggleBody = z.object({
+  enabled: z.boolean().optional(),
+});
 
 // POST - Generate a random simulator transaction
-router.post('/generate-transaction', async (req, res) => {
-  const client = await db.getClient(req.experience);
+router.post('/generate-transaction', validate({ body: generateBody }), async (req, res) => {
+  let client;
   try {
+    client = await db.getClient(req.experience);
     await client.query('BEGIN');
 
     // Get random products (1-5 items)
@@ -98,11 +108,10 @@ router.post('/generate-transaction', async (req, res) => {
       message: 'Simulator transaction generated'
     });
   } catch (err) {
-    await client.query('ROLLBACK');
-    console.error(err);
-    res.status(500).json({ error: 'Failed to generate simulator transaction' });
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    sendError(res, err, 'Failed to generate simulator transaction');
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
@@ -137,7 +146,7 @@ router.get('/status', (req, res) => {
 });
 
 // PUT toggle simulator state (broadcast to all clients)
-router.put('/toggle', (req, res) => {
+router.put('/toggle', validate({ body: toggleBody }), (req, res) => {
   const { enabled } = req.body;
   if (typeof enabled === 'boolean') {
     simulatorEnabled = enabled;

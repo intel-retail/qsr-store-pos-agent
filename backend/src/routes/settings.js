@@ -9,6 +9,11 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const db = require('../db');
+const { z, validate, sendError } = require('../validation');
+
+const updateBody = z.object({
+  stockCheckEnabled: z.boolean().optional(),
+});
 
 const SETTINGS_FILE = path.join(__dirname, '..', '..', 'settings.json');
 
@@ -45,7 +50,7 @@ router.get('/', (req, res) => {
 });
 
 // PUT update settings
-router.put('/', (req, res) => {
+router.put('/', validate({ body: updateBody }), (req, res) => {
   const { stockCheckEnabled } = req.body;
   if (typeof stockCheckEnabled === 'boolean') {
     settings.stockCheckEnabled = stockCheckEnabled;
@@ -61,8 +66,7 @@ router.delete('/transactions', async (req, res) => {
     await db.query('DELETE FROM transactions', [], req.experience);
     res.json({ message: 'All transactions cleared' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to clear transactions' });
+    sendError(res, err, 'Failed to clear transactions');
   }
 });
 

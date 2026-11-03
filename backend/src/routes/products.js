@@ -7,9 +7,46 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { z, guid, money, shortText, idParams, validate, sendError } = require('../validation');
+
+const optionalText = (max) => z.string().trim().max(max).nullish();
+// barcode is UNIQUE, so "" from a blank form field would collide with the next blank one.
+const barcodeText = z.string().trim().max(50).nullish().transform((v) => v || null);
+const stockQuantity = z.number().int().min(0).max(1000000000);
+
+const listQuery = z.object({
+  category: z.union([guid, z.literal('undefined')]).optional(),
+  search: z.string().max(100).optional(),
+  active: z.enum(['true', 'false']).optional(),
+});
+
+const createBody = z.object({
+  name: shortText(200),
+  sku: shortText(50),
+  barcode: barcodeText,
+  category_id: guid.nullish(),
+  price: money,
+  cost: money.nullish(),
+  stock_quantity: stockQuantity.nullish(),
+  unit: optionalText(20),
+  image_url: optionalText(2048),
+});
+
+const updateBody = z.object({
+  name: shortText(200).nullish(),
+  sku: shortText(50).nullish(),
+  barcode: barcodeText,
+  category_id: guid.nullish(),
+  price: money.nullish(),
+  cost: money.nullish(),
+  stock_quantity: stockQuantity.nullish(),
+  unit: optionalText(20),
+  image_url: optionalText(2048),
+  is_active: z.boolean().nullish(),
+});
 
 // GET all products
-router.get('/', async (req, res) => {
+router.get('/', validate({ query: listQuery }), async (req, res) => {
   try {
     const { category, search, active } = req.query;
     let query = `
@@ -37,13 +74,12 @@ router.get('/', async (req, res) => {
     const result = await db.query(query, params, req.experience);
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch products' });
+    sendError(res, err, 'Failed to fetch products');
   }
 });
 
 // GET single product
-router.get('/:id', async (req, res) => {
+router.get('/:id', validate({ params: idParams }), async (req, res) => {
   try {
     const result = await db.query(
       `SELECT p.*, c.name as category_name 
@@ -58,18 +94,14 @@ router.get('/:id', async (req, res) => {
     }
     res.json(result.rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch product' });
+    sendError(res, err, 'Failed to fetch product');
   }
 });
 
 // POST create product
-router.post('/', async (req, res) => {
+router.post('/', validate({ body: createBody }), async (req, res) => {
   try {
     const { name, sku, barcode, category_id, price, cost, stock_quantity, unit, image_url } = req.body;
-    if (!name || !sku || price === undefined) {
-      return res.status(400).json({ error: 'Name, SKU, and price are required' });
-    }
     const result = await db.query(
       `INSERT INTO products (name, sku, barcode, category_id, price, cost, stock_quantity, unit, image_url)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
@@ -81,13 +113,12 @@ router.post('/', async (req, res) => {
     if (err.code === '23505') {
       return res.status(409).json({ error: 'Product with this SKU or barcode already exists' });
     }
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create product' });
+    sendError(res, err, 'Failed to create product');
   }
 });
 
 // PUT update product
-router.put('/:id', async (req, res) => {
+router.put('/:id', validate({ params: idParams, body: updateBody }), async (req, res) => {
   try {
     const { name, sku, barcode, category_id, price, cost, stock_quantity, unit, image_url, is_active } = req.body;
     const result = await db.query(
@@ -111,13 +142,15 @@ router.put('/:id', async (req, res) => {
     }
     res.json(result.rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update product' });
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Product with this SKU or barcode already exists' });
+    }
+    sendError(res, err, 'Failed to update product');
   }
 });
 
 // DELETE product
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', validate({ params: idParams }), async (req, res) => {
   try {
     const result = await db.query('DELETE FROM products WHERE id = $1 RETURNING id', [req.params.id], req.experience);
     if (result.rows.length === 0) {
@@ -125,8 +158,7 @@ router.delete('/:id', async (req, res) => {
     }
     res.json({ message: 'Product deleted' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to delete product' });
+    sendError(res, err, 'Failed to delete product');
   }
 });
 
