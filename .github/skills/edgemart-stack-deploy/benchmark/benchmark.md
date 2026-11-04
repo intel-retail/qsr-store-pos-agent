@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 **Agents**: Copilot (`claude-sonnet-5.5`)  
 **Grader**: Copilot (`claude-sonnet-5.5`)  
-**Date**: 2026-11-04T07:20:52Z  
+**Date**: 2026-11-04T08:51:32Z  
 **Evals**: 1, 2, 3, 4, 5, 6 (1 run per configuration)
 
 ## Summary
@@ -30,7 +30,7 @@ SPDX-License-Identifier: Apache-2.0
 
 | Agent | w/o skill | w/ skill | Lift |
 |---|---|---|---|
-| Copilot (`claude-sonnet-5.5`) | 230 s | 169 s | -61 s ↓ |
+| Copilot (`claude-sonnet-5.5`) | 286 s | 193 s | -93 s ↓ |
 
 ### Tokens (total across all evals)
 
@@ -44,8 +44,8 @@ SPDX-License-Identifier: Apache-2.0
 
 | Eval | Prompt | Copilot (w/) | Copilot (w/o) |
 |---|---|---|---|
-| 1 | I cloned qsr-store-pos-agent and ran docker compose up but it exits immediately ... | PASS (3/3) | FAIL (2/3) |
-| 2 | I edited backend/src/table-occupancy-service/index.js and ran docker compose up ... | PASS (3/3) | PASS (3/3) |
+| 1 | I cloned qsr-store-pos-agent and ran docker compose up but it exits immediately ... | PASS (3/3) | PASS (3/3) |
+| 2 | I edited backend/src/table-occupancy-service/index.js and ran docker compose up ... | PASS (3/3) | FAIL (2/3) |
 | 3 | The Agent Chat tab says the gateway is disconnected, but the backend container i... | PASS (3/3) | PASS (3/3) |
 | 4 | Our network needs a proxy. How do I build the images for the store event service... | PASS (2/2) | PASS (2/2) |
 | 5 | I changed database/cafe/schema.sql but the running Postgres container doesn't ha... | PASS (3/3) | PASS (3/3) |

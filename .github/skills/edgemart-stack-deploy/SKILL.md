@@ -58,9 +58,16 @@ images and wrong hostnames between containers and the host.
 4. Rebuild after code changes with `docker compose up --build <service>`. The three
    event services and their MCP sidecars share one image per service
    (`${IMAGE_REGISTRY:-qsr-store-pos-agent}/<service>:${IMAGE_TAG:-latest}`), so
-   rebuild the service and its `-mcp` sidecar together. `--force-recreate` alone
-   reuses the existing image and silently keeps running old code, because source is
-   baked in by `COPY` at build time.
+   rebuild the service and its sidecar together. The sidecar service names are
+   `store-activity-service-mcp`, `table-occupancy-service-mcp` and
+   `footfall-service-mcp`; Compose rejects any other name. For example:
+
+   ```bash
+   docker compose up -d --build table-occupancy-service table-occupancy-service-mcp
+   ```
+
+   `--force-recreate` alone reuses the existing image and silently keeps running old
+   code, because source is baked in by `COPY` at build time.
 
 ## Things that are easy to get wrong
 
@@ -86,8 +93,26 @@ images and wrong hostnames between containers and the host.
 
 ## Native (no Docker) backend
 
+Requires Node.js 18+ and PostgreSQL 14+. Create and initialize both databases first;
+the schema files are not applied automatically outside Compose:
+
 ```bash
-cd backend && npm install && cp .env.example .env && npm run dev
+createdb -U postgres pos_grocery
+psql -U postgres -d pos_grocery -f database/grocery/schema.sql
+createdb -U postgres pos_cafe
+psql -U postgres -d pos_cafe -f database/cafe/schema.sql
+```
+
+Then configure the backend. Set `DB_PASSWORD` in `backend/.env` to the real Postgres
+password (the template value is a placeholder), and run the backend and frontend in
+two terminals because `npm run dev` does not return:
+
+```bash
+# terminal 1, from the repository root
+cd backend && npm install && cp .env.example .env   # edit .env, then:
+npm run dev
+
+# terminal 2, from the repository root
 cd frontend && npm install && ng serve   # http://localhost:4200
 ```
 

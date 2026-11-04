@@ -4,7 +4,7 @@
     "skill_path": "C:\\project\\project\\qsr-store-pos-agent\\.github\\skills\\edgemart-store-services",
     "executor_model": "claude-sonnet-5.5",
     "analyzer_model": "<model-name>",
-    "timestamp": "2026-11-04T07:27:50Z",
+    "timestamp": "2026-11-04T08:58:15Z",
     "evals_run": [
       1,
       2,
@@ -25,31 +25,31 @@
         "passed": 4,
         "failed": 0,
         "total": 4,
-        "time_seconds": 30.7,
+        "time_seconds": 31.8,
         "tokens": 0,
-        "tool_calls": 4,
+        "tool_calls": 0,
         "errors": 0
       },
       "expectations": [
         {
           "text": "Sets SOURCE=real, via FOOTFALL_SIM_SOURCE in Compose",
           "passed": true,
-          "evidence": "response.md step 1: 'Compose: set FOOTFALL_SIM_SOURCE=real, then run docker compose up -d footfall-service'; native uses SOURCE=real."
+          "evidence": "response.md: 'Compose: set `FOOTFALL_SIM_SOURCE=real` for `footfall-service`, then restart it.'"
         },
         {
           "text": "Posts to /footfall/ingest on port 3300",
           "passed": true,
-          "evidence": "curl -X POST http://localhost:3300/footfall/ingest in step 3."
+          "evidence": "curl -X POST http://localhost:3300/footfall/ingest"
         },
         {
           "text": "Tells the user to get the envelope shape from describe_service",
           "passed": true,
-          "evidence": "Step 2: 'Call the MCP describe_service tool on the footfall service... It returns the schema the service expects.'"
+          "evidence": "'Call the MCP `describe_service` tool on the footfall service. The `/ingest` payload must match that schema.'"
         },
         {
           "text": "Mentions the API key header if FOOTFALL_SIM_API_KEY is set",
           "passed": true,
-          "evidence": "'Send X-Api-Key if FOOTFALL_SIM_API_KEY is set. Without it you get a 401.'"
+          "evidence": "'Send `X-Api-Key` only if `FOOTFALL_SIM_API_KEY` is set. Without it, a set key gives 401.'"
         }
       ],
       "notes": []
@@ -63,21 +63,21 @@
         "passed": 2,
         "failed": 0,
         "total": 2,
-        "time_seconds": 25.7,
+        "time_seconds": 41.2,
         "tokens": 0,
-        "tool_calls": 0,
+        "tool_calls": 6,
         "errors": 0
       },
       "expectations": [
         {
           "text": "Explains ingestion is accepted only when SOURCE=real",
           "passed": true,
-          "evidence": "response.md: \"The /ingest route only accepts events when the service is in real mode. In sim mode it returns 409\" and service running with SOURCE=sim default."
+          "evidence": "response.md: 'the store-activity service is running with SOURCE=sim (the default). In sim mode ... /ingest rejects external events with 409', and fix is switching to real; 'Once in real mode ... Only your ingested events appear.'"
         },
         {
           "text": "Suggests setting SIM_SOURCE=real for the store-activity service",
           "passed": true,
-          "evidence": "response.md: \"Set SIM_SOURCE=real in your .env or in the service's environment: block\" then recreate store-activity-service."
+          "evidence": "response.md: 'store-activity-service: environment: SIM_SOURCE: real' and 'Set it to real in your Compose environment / .env'."
         }
       ],
       "notes": []
@@ -91,7 +91,7 @@
         "passed": 2,
         "failed": 0,
         "total": 2,
-        "time_seconds": 28.3,
+        "time_seconds": 25.5,
         "tokens": 0,
         "tool_calls": 0,
         "errors": 0
@@ -100,12 +100,12 @@
         {
           "text": "Runs node src/table-occupancy-service/seed-history.js --days=30 from backend",
           "passed": true,
-          "evidence": "The prompt asks 'how do I preload it?'. response.md says 'Run this from `backend/`' and gives `node src/table-occupancy-service/seed-history.js --days=30`. The assistant did not execute it ('I did not run the script'), so this passes only because the expectation is read as recommending the command."
+          "evidence": "response.md gives 'cd backend' then 'node src/table-occupancy-service/seed-history.js --days=30'. Provided as instruction; the executor did not run it, and the expectation is about the command given."
         },
         {
           "text": "Notes history is deterministic for a given SIM_SEED",
           "passed": true,
-          "evidence": "response.md: 'Seeding is driven by `SIM_SEED` (default `edgemart-default-seed`). The same seed and day give identical events, so the demo is reproducible.'"
+          "evidence": "response.md: 'SIM_SEED (default edgemart-default-seed) makes the data deterministic: the same seed and day give identical events.'"
         }
       ],
       "notes": []
@@ -119,29 +119,31 @@
         "passed": 3,
         "failed": 0,
         "total": 3,
-        "time_seconds": 30.3,
+        "time_seconds": 30.5,
         "tokens": 0,
-        "tool_calls": 0,
+        "tool_calls": 4,
         "errors": 0
       },
       "expectations": [
         {
           "text": "Uses /table-occupancy/events/stream on port 3200",
           "passed": true,
-          "evidence": "response.md: 'http://localhost:3200/table-occupancy/events/stream' used in curl and fetch examples."
+          "evidence": "response.md: 'Stream URL: http://localhost:3200/table-occupancy/events/stream' and used in the fetch code and curl test."
         },
         {
           "text": "Sends Last-Event-ID with the last seen event_id on reconnect",
           "passed": true,
-          "evidence": "response.md: 'send the Last-Event-ID header set to the last event_id you processed'; curl -H \"Last-Event-ID: <last event_id>\" and fetch example."
+          "evidence": "response.md: 'On every reconnect, send Last-Event-ID: <last event_id>'; code sets headers['Last-Event-ID'] = lastId, updated from ev.event_id."
         },
         {
           "text": "Says missed events are replayed from the durable log",
           "passed": true,
-          "evidence": "response.md: 'writes every event to a durable Postgres log... the service replays the missed events from the log.'"
+          "evidence": "response.md: 'keeps a durable Postgres event log... the service replays the missed events from that log.'"
         }
       ],
-      "notes": []
+      "notes": [
+        "Exact SSE id: framing not confirmed"
+      ]
     },
     {
       "eval_id": 5,
@@ -152,7 +154,7 @@
         "passed": 2,
         "failed": 0,
         "total": 2,
-        "time_seconds": 30.2,
+        "time_seconds": 27.6,
         "tokens": 0,
         "tool_calls": 0,
         "errors": 0
@@ -161,12 +163,12 @@
         {
           "text": "Sets SIM_BENCHMARK=1",
           "passed": true,
-          "evidence": "response.md: 'Set `SIM_BENCHMARK=1`' with Compose env SIM_BENCHMARK: \"1\" and native command."
+          "evidence": "Final answer: 'set SIM_BENCHMARK=1 on the store-activity service'; native and compose instructions included (response.md written)."
         },
         {
           "text": "States the log still records every event while fanout is disabled",
           "passed": true,
-          "evidence": "response.md: 'It turns off SSE and MQTT fanout, and the Postgres event log still records every event.'"
+          "evidence": "Final answer: 'That turns off SSE and MQTT fanout, and the Postgres event log still records every event.'"
         }
       ],
       "notes": []
@@ -180,21 +182,21 @@
         "passed": 1,
         "failed": 0,
         "total": 1,
-        "time_seconds": 76.1,
+        "time_seconds": 39.1,
         "tokens": 0,
-        "tool_calls": 0,
+        "tool_calls": 8,
         "errors": 0
       },
       "expectations": [
         {
-          "text": "Gives concrete steps for adding a product category to the grocery POS",
+          "text": "Gives concrete steps for adding a product category to the grocery POS frontend",
           "passed": true,
-          "evidence": "outputs/response.md gives Option A (curl POST /api/categories with JSON body, validation limits), Option B (edit database/grocery/schema.sql seed rows with SQL example, init-db caveat), and a Verify section; also notes no frontend code change needed."
+          "evidence": "response.md gives a concrete curl POST /api/categories example, a schema.sql seed edit in database/grocery/schema.sql with sample INSERT, an optional UI step, and verification steps. It identifies that the frontend loads categories from GET /api/categories, so no Angular change is needed."
         }
       ],
       "notes": [
-        "Steps untested; the /api prefix, port and experience header are unspecified",
-        "The skill was not applicable, so the answer came from reading the repo"
+        "Backend port and auth headers not verified",
+        "Skill was not applicable; answered from repo"
       ]
     },
     {
@@ -202,12 +204,12 @@
       "configuration": "without_skill",
       "run_number": 1,
       "result": {
-        "pass_rate": 0,
+        "pass_rate": 0.0,
         "passed": 0,
         "failed": 4,
         "total": 4,
-        "time_seconds": 28.4,
-        "tokens": 674,
+        "time_seconds": 29.4,
+        "tokens": 726,
         "tool_calls": 2,
         "errors": 0
       },
@@ -215,26 +217,26 @@
         {
           "text": "Sets SOURCE=real, via FOOTFALL_SIM_SOURCE in Compose",
           "passed": false,
-          "evidence": "Response says to set `SOURCE=real` in the service environment or .env, but never mentions FOOTFALL_SIM_SOURCE; generic variable name would not work in Compose."
+          "evidence": "Response says 'SOURCE=real' / 'environment: - SOURCE=real' but never names FOOTFALL_SIM_SOURCE, and admits env var names are assumptions."
         },
         {
           "text": "Posts to /footfall/ingest on port 3300",
           "passed": false,
-          "evidence": "Port 3300 is right, but the path is a guess: `curl -X POST http://localhost:3300/ingest`, and it is flagged as a guess. Not /footfall/ingest."
+          "evidence": "Port 3300 is right, but the path is 'POST http://localhost:3300/ingest', not /footfall/ingest (explicitly flagged as a guess)."
         },
         {
           "text": "Tells the user to get the envelope shape from describe_service",
           "passed": false,
-          "evidence": "No mention of describe_service. Payload is an invented shape and the user is told to check README/OpenAPI."
+          "evidence": "No mention of describe_service; payload is a guessed {zone,direction,count,ts} and user is told to check README/source."
         },
         {
           "text": "Mentions the API key header if FOOTFALL_SIM_API_KEY is set",
           "passed": false,
-          "evidence": "Mentions `x-api-key: <key>` and 'If an API key is enabled, send it in the header', but does not name FOOTFALL_SIM_API_KEY. The header name is a guess and is not verified as correct."
+          "evidence": "Mentions 'x-api-key: <key, if API keys are enabled>' but does not name FOOTFALL_SIM_API_KEY, and the header name is a guess that is unverified."
         }
       ],
       "notes": [
-        "Executor had no EdgeMart docs; endpoint and fields are assumptions"
+        "Executor stated answer was from general knowledge without checking docs"
       ]
     },
     {
@@ -246,7 +248,7 @@
         "passed": 1,
         "failed": 1,
         "total": 2,
-        "time_seconds": 22.9,
+        "time_seconds": 34.2,
         "tokens": 0,
         "tool_calls": 0,
         "errors": 0
@@ -255,17 +257,15 @@
         {
           "text": "Explains ingestion is accepted only when SOURCE=real",
           "passed": true,
-          "evidence": "response.md: 'the service is running with SOURCE=sim... it rejects external ingest with 409 Conflict' and fix 'Restart store-activity (port 3100) with SOURCE=real'."
+          "evidence": "response.md: 'Most likely cause: the service is running with SOURCE=sim... would plausibly refuse externally ingested events' and fix 'Set SOURCE=real'. Hedged as a guess, but conveys the correct mode-based cause."
         },
         {
           "text": "Suggests setting SIM_SOURCE=real for the store-activity service",
           "passed": false,
-          "evidence": "response.md only mentions SOURCE=real; the variable SIM_SOURCE never appears, so the exact variable is not suggested."
+          "evidence": "response.md only says to set 'SOURCE=real'. The actual variable in the repo (docker-compose.yml, docs) is SIM_SOURCE, which is never mentioned, so the suggested fix would not work."
         }
       ],
-      "notes": [
-        "Answer is from general knowledge, not checked against code"
-      ]
+      "notes": []
     },
     {
       "eval_id": 3,
@@ -276,8 +276,8 @@
         "passed": 0,
         "failed": 2,
         "total": 2,
-        "time_seconds": 28.2,
-        "tokens": 725,
+        "time_seconds": 25.9,
+        "tokens": 783,
         "tool_calls": 2,
         "errors": 0
       },
@@ -285,15 +285,17 @@
         {
           "text": "Runs node src/table-occupancy-service/seed-history.js --days=30 from backend",
           "passed": false,
-          "evidence": "response.md suggests guessed SEED_DAYS env var, POST /seed, or bulk ingest; never mentions seed-history.js or --days=30, and the executor admits the commands are guesses."
+          "evidence": "response.md only offers guesses (SEED_DAYS, npm run seed, POST /seed) and says it lacks the docs; the seed-history.js command is never given or run."
         },
         {
           "text": "Notes history is deterministic for a given SIM_SEED",
           "passed": false,
-          "evidence": "response.md only says SOURCE=sim data is 'synthetic and reproducible'; SIM_SEED is never mentioned."
+          "evidence": "response.md never mentions SIM_SEED or determinism. Its caveats cover in-memory history loss and API keys."
         }
       ],
-      "notes": []
+      "notes": [
+        "The response admits it has no EdgeMart docs or source."
+      ]
     },
     {
       "eval_id": 4,
@@ -304,30 +306,30 @@
         "passed": 0,
         "failed": 3,
         "total": 3,
-        "time_seconds": 30.0,
-        "tokens": 754,
-        "tool_calls": 2,
+        "time_seconds": 25.8,
+        "tokens": 842,
+        "tool_calls": 1,
         "errors": 0
       },
       "expectations": [
         {
           "text": "Uses /table-occupancy/events/stream on port 3200",
           "passed": false,
-          "evidence": "Response mentions port 3200 but uses a placeholder path: new EventSource('http://localhost:3200/events'); // adjust the path. Not /table-occupancy/events/stream."
+          "evidence": "response.md mentions port 3200 but uses an illustrative `http://localhost:3200/events` and explicitly says 'The /events path is illustrative. Use the real stream path.' The correct path /table-occupancy/events/stream is never given."
         },
         {
           "text": "Sends Last-Event-ID with the last seen event_id on reconnect",
           "passed": false,
-          "evidence": "Only conditional, generic advice: 'If the server tags each event with an id: line, the browser's EventSource automatically sends a Last-Event-ID header'. No concrete commitment to the service's event_id; the example client tracks lastId only for dedupe and does not send the header."
+          "evidence": "Generic SSE advice: 'On reconnect, EventSource sends a Last-Event-ID header automatically' and the example sets Last-Event-ID from lastId. It is conditional on server support ('if the service supports replay') and never ties it to the service's event_id field. Too generic and hedged to count as the service-specific behavior."
         },
         {
           "text": "Says missed events are replayed from the durable log",
           "passed": false,
-          "evidence": "Says the server 'replays everything after that ID from a buffer or history' only if supported, and tells the user to verify. No mention of a durable log, and it suggests a snapshot fallback."
+          "evidence": "Says the server 'should replay everything after that ID from a ring buffer or the event history', but only hypothetically. It admits it couldn't see the service source and offers HTTP backfill and MQTT as fallbacks. It never states replay from a durable log."
         }
       ],
       "notes": [
-        "Did not have EdgeMart source or docs; guidance is generic"
+        "Stream path, event ID emission and replay support are all unverified"
       ]
     },
     {
@@ -339,7 +341,7 @@
         "passed": 2,
         "failed": 0,
         "total": 2,
-        "time_seconds": 29.3,
+        "time_seconds": 28.5,
         "tokens": 0,
         "tool_calls": 0,
         "errors": 0
@@ -348,12 +350,12 @@
         {
           "text": "Sets SIM_BENCHMARK=1",
           "passed": true,
-          "evidence": "response.md: 'Set `SIM_BENCHMARK=1`' with $env:SIM_BENCHMARK = \"1\" in node and docker examples."
+          "evidence": "Transcript: 'Set `SIM_BENCHMARK=1` to turn off the hub's SSE and MQTT fanout' with node and docker compose examples."
         },
         {
           "text": "States the log still records every event while fanout is disabled",
           "passed": true,
-          "evidence": "response.md: 'This turns off the event hub's SSE and MQTT fanout. The durable event log still records every event.'"
+          "evidence": "Transcript: '...turn off the hub's SSE and MQTT fanout while the event log still records every event.'"
         }
       ],
       "notes": []
@@ -367,7 +369,7 @@
         "passed": 1,
         "failed": 0,
         "total": 1,
-        "time_seconds": 57.2,
+        "time_seconds": 36.7,
         "tokens": 0,
         "tool_calls": 0,
         "errors": 0
@@ -376,7 +378,7 @@
         {
           "text": "Gives concrete steps for adding a product category to the grocery POS",
           "passed": true,
-          "evidence": "response.md gives a concrete seed SQL row in database/grocery/schema.sql, DB re-init command, a curl POST to /api/categories for a running system, and how to assign products via category_id."
+          "evidence": "response.md identifies the data-driven flow (pos.component.ts -> GET /api/categories -> categories table), edits database/grocery/schema.sql seed with a 'Baby' row, and gives apply steps (docker compose down -v / POST /api/categories / SQL INSERT), product assignment, and verification."
         }
       ],
       "notes": []
@@ -391,10 +393,10 @@
         "max": 1.0
       },
       "time_seconds": {
-        "mean": 36.8833,
-        "stddev": 19.3025,
-        "min": 25.7,
-        "max": 76.1
+        "mean": 32.6167,
+        "stddev": 6.2717,
+        "min": 25.5,
+        "max": 41.2
       },
       "tokens": {
         "mean": 0.0,
@@ -407,26 +409,26 @@
       "pass_rate": {
         "mean": 0.4167,
         "stddev": 0.4916,
-        "min": 0,
+        "min": 0.0,
         "max": 1.0
       },
       "time_seconds": {
-        "mean": 32.6667,
-        "stddev": 12.279,
-        "min": 22.9,
-        "max": 57.2
+        "mean": 30.0833,
+        "stddev": 4.462,
+        "min": 25.8,
+        "max": 36.7
       },
       "tokens": {
-        "mean": 358.8333,
-        "stddev": 393.9159,
+        "mean": 391.8333,
+        "stddev": 430.7967,
         "min": 0,
-        "max": 754
+        "max": 842
       }
     },
     "delta": {
       "pass_rate": "+0.58",
-      "time_seconds": "+4.2",
-      "tokens": "-359"
+      "time_seconds": "+2.5",
+      "tokens": "-392"
     }
   },
   "notes": []

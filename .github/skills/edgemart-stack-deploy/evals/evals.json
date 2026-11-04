@@ -22,7 +22,7 @@
       "expectations": [
         "States that source is baked into the image so force-recreate reuses the old image",
         "Recommends docker compose up --build for the service",
-        "Mentions rebuilding the matching -mcp sidecar that shares the image"
+        "Names the sidecar by its real Compose service name, table-occupancy-service-mcp, in the rebuild command"
       ]
     },
     {

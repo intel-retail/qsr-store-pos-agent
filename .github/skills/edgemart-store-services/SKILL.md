@@ -43,11 +43,12 @@ edgemart-agent-mcp.
 ## Instructions
 
 1. **Start a service.** Compose: `docker compose up -d store-activity-service
-   table-occupancy-service footfall-service`. Native, from `backend/`:
+   table-occupancy-service footfall-service`. Native, from `backend/`. The service runs
+   in the foreground, so seed history first, or run the seed in a second terminal:
 
    ```bash
-   node src/table-occupancy-service/index.js
    node src/table-occupancy-service/seed-history.js --days=14
+   node src/table-occupancy-service/index.js
    ```
 
    The same layout applies to the other two services.

@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 **Agents**: Copilot (`claude-sonnet-5.5`)  
 **Grader**: Copilot (`claude-sonnet-5.5`)  
-**Date**: 2026-11-04T07:27:50Z  
+**Date**: 2026-11-04T08:58:15Z  
 **Evals**: 1, 2, 3, 4, 5, 6 (1 run per configuration)
 
 ## Summary
@@ -30,7 +30,7 @@ SPDX-License-Identifier: Apache-2.0
 
 | Agent | w/o skill | w/ skill | Lift |
 |---|---|---|---|
-| Copilot (`claude-sonnet-5.5`) | 196 s | 221 s | +25 s ↓ |
+| Copilot (`claude-sonnet-5.5`) | 180 s | 196 s | +15 s ↓ |
 
 ### Tokens (total across all evals)
 

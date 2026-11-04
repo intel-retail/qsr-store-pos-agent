@@ -87,11 +87,19 @@ return the live contract, so do not guess event names.
 
 - Revenue, products, customers: pos-tools. Use `run_query` only for read-only ad hoc
   SQL when no dedicated tool fits; call `get_schema` first.
-- "Which tables are dirty right now": table-status or `get_current_snapshot`.
+- "Which tables are dirty right now": the right tool depends on where the events
+  went. table-status holds live state built from the MQTT topics
+  `cafe/vision/events`, `cafe/pos/events` and `cafe/staff/events`. store-activity's
+  `get_current_snapshot` and table-occupancy read their own durable event logs. They do
+  not share state, so an event ingested into one need not show in another, and
+  table-status then reports the default clean state. Ask which source the events
+  were sent to, or query the one that matches the user's pipeline.
 - Utilization and how long tables stay dirty over a date range: table-occupancy.
 - Busy hours and visitor counts by zone: footfall.
-- Parameter names differ by server. table-status takes `table_id`; table-occupancy and
-  store-activity take `table_ref`. Table ids look like `table-4`.
+- Parameter names differ by server. table-status takes `table_id`; the table-occupancy
+  tools and store-activity's `mark_table_cleared` take `table_ref`. store-activity's
+  `inject_event` takes `ref` instead (plus `event_type`); pass the table id there or
+  the event is stored with `ref: null`. Table ids look like `table-4`.
 - Dates are `YYYY-MM-DD`.
 - Action tools (`mark_table_cleared`, `mark_table_occupied`, `inject_event`) change
   state. Confirm intent before calling them on behalf of a user.
