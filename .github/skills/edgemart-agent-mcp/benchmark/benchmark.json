@@ -1,7 +1,7 @@
 {
   "metadata": {
     "skill_name": "edgemart-agent-mcp",
-    "skill_path": "C:\\project\\project\\qsr-store-pos-agent\\.github\\skills\\edgemart-agent-mcp",
+    "skill_path": ".github/skills/edgemart-agent-mcp",
     "executor_model": "claude-sonnet-5.5",
     "analyzer_model": "<model-name>",
     "timestamp": "2026-11-04T08:54:49Z",
@@ -34,7 +34,7 @@
         {
           "text": "Uses backend/src/mcp-server.js with command node",
           "passed": true,
-          "evidence": "response.md config: 'command: node' with args 'C:\\project\\project\\qsr-store-pos-agent\\backend\\src\\mcp-server.js'"
+          "evidence": "response.md config: 'command: node' with args '<repo>/backend/src/mcp-server.js'"
         },
         {
           "text": "Sets MCP_DB_NAME to pos_cafe",

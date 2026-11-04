@@ -1,7 +1,7 @@
 {
   "metadata": {
     "skill_name": "edgemart-stack-deploy",
-    "skill_path": "C:\\project\\project\\qsr-store-pos-agent\\.github\\skills\\edgemart-stack-deploy",
+    "skill_path": ".github/skills/edgemart-stack-deploy",
     "executor_model": "claude-sonnet-5.5",
     "analyzer_model": "<model-name>",
     "timestamp": "2026-11-04T08:51:32Z",
