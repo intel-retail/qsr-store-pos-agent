@@ -1,0 +1,450 @@
+{
+  "metadata": {
+    "skill_name": "edgemart-agent-mcp",
+    "skill_path": "C:\\project\\project\\qsr-store-pos-agent\\.github\\skills\\edgemart-agent-mcp",
+    "executor_model": "claude-sonnet-5.5",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-11-04T07:24:07Z",
+    "evals_run": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "runs_per_configuration": 1
+  },
+  "runs": [
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 29.3,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Uses backend/src/mcp-server.js with command node",
+          "passed": true,
+          "evidence": "response.md YAML: 'command: node' with args 'C:\\path\\to\\qsr-store-pos-agent\\backend\\src\\mcp-server.js'"
+        },
+        {
+          "text": "Sets MCP_DB_NAME to pos_cafe",
+          "passed": true,
+          "evidence": "response.md env: 'MCP_DB_NAME: pos_cafe'"
+        },
+        {
+          "text": "Notes the default database is grocery",
+          "passed": true,
+          "evidence": "response.md: 'It defaults to the grocery database, and without it the agent would query grocery data'"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 31.4,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Points to POST /mcp on port 3201 of table-occupancy-service-mcp",
+          "passed": true,
+          "evidence": "response.md: 'the service `table-occupancy-service-mcp` serves MCP at `POST /mcp` on port **3201**.'"
+        },
+        {
+          "text": "Mentions MCP_API_KEY with X-Api-Key or bearer token",
+          "passed": true,
+          "evidence": "response.md: 'Set `MCP_API_KEY` on the server. Clients must then send either `X-Api-Key: <key>` or `Authorization: ******`' (bearer token header, redacted in text)."
+        },
+        {
+          "text": "Does not claim pos-tools or table-status are available over HTTP",
+          "passed": true,
+          "evidence": "response.md Notes: table-status 'is stdio only' and 'pos-tools is also stdio only'."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 24.3,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "States table-occupancy and store-activity tools take table_ref",
+          "passed": true,
+          "evidence": "response.md: 'get_utilization belongs to the table-occupancy server, which takes table_ref. The store-activity server also takes table_ref.'"
+        },
+        {
+          "text": "States the table-status server takes table_id",
+          "passed": true,
+          "evidence": "response.md: 'Only the table-status server (...) takes table_id.'"
+        },
+        {
+          "text": "Gives an example id such as table-4",
+          "passed": true,
+          "evidence": "response.md: 'ids look like table-4'"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 4,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 33.2,
+        "tokens": 791,
+        "tool_calls": 4,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Sets API_SERVER_ENABLED, API_SERVER_PORT=3001, API_SERVER_HOST and API_SERVER_KEY",
+          "passed": true,
+          "evidence": "response.md ~/.hermes/.env block: API_SERVER_ENABLED=true, API_SERVER_PORT=3001, API_SERVER_HOST=0.0.0.0, API_SERVER_KEY=<choose-a-secret>"
+        },
+        {
+          "text": "Says API_SERVER_KEY must equal the backend HERMES_API_KEY",
+          "passed": true,
+          "evidence": "'API_SERVER_KEY=<choose-a-secret>   # must equal the backend's HERMES_API_KEY' and 'HERMES_API_KEY=<same value as API_SERVER_KEY>'; 401 troubleshooting note too."
+        },
+        {
+          "text": "Mentions the 64K minimum context for the model",
+          "passed": true,
+          "evidence": "Section 0: 'It must have at least 64K context.' Also repeated in troubleshooting table."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 5,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 31.1,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Uses get_dirty_duration_stats from table-occupancy for the duration question",
+          "passed": true,
+          "evidence": "response.md step 4: 'Call get_dirty_duration_stats on table-occupancy for this month' with range 2026-11-01 to 2026-11-04. It is only a plan; no call was actually executed."
+        },
+        {
+          "text": "Uses mark_table_cleared for the action",
+          "passed": true,
+          "evidence": "response.md step 3: 'mark_table_cleared(table_ref=\"table-7\") on table-occupancy'. It is only a plan; no call was actually executed."
+        },
+        {
+          "text": "States that intent should be confirmed or restated before calling mark_table_cleared",
+          "passed": true,
+          "evidence": "response.md step 3: 'Confirm intent, then clear. mark_table_cleared changes state, so I confirm with the user first.'"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 6,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 1,
+        "failed": 0,
+        "total": 1,
+        "time_seconds": 41.5,
+        "tokens": 996,
+        "tool_calls": 4,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Provides a complete MCP server implementation for the weather API request",
+          "passed": true,
+          "evidence": "outputs/response.md contains a full runnable weather_server.py using FastMCP and Open-Meteo, with three tools (search_location, get_current_weather, get_forecast), unit handling, error handling, a stdio entrypoint, setup steps, test command and client registration config. The executor stated it did not run the code."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.0,
+        "passed": 0,
+        "failed": 3,
+        "total": 3,
+        "time_seconds": 25.5,
+        "tokens": 0,
+        "tool_calls": 1,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Uses backend/src/mcp-server.js with command node",
+          "passed": false,
+          "evidence": "response.md uses `command: python` with `args: [\"-m\", \"pos_tools.server\"]`, a guessed entrypoint. It never mentions backend/src/mcp-server.js or node."
+        },
+        {
+          "text": "Sets MCP_DB_NAME to pos_cafe",
+          "passed": false,
+          "evidence": "response.md sets `DB_NAME: cafe`. The variable name and value are both wrong. The response admits the env var name is an assumption."
+        },
+        {
+          "text": "Notes the default database is grocery",
+          "passed": false,
+          "evidence": "response.md says to point at cafe 'not grocery' but never says grocery is the server's default. It states 'I can't see the repo'."
+        }
+      ],
+      "notes": [
+        "Entrypoint, env var names, port and config location are all assumptions"
+      ]
+    },
+    {
+      "eval_id": 2,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.33,
+        "passed": 1,
+        "failed": 2,
+        "total": 3,
+        "time_seconds": 30.9,
+        "tokens": 0,
+        "tool_calls": 2,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Points to POST /mcp on port 3201 of table-occupancy-service-mcp",
+          "passed": false,
+          "evidence": "Response mentions POST /mcp but uses placeholder port 8003 (http://localhost:8003/mcp) and service name 'table-occupancy'; never mentions port 3201 or table-occupancy-service-mcp. It admits it did not inspect the repo."
+        },
+        {
+          "text": "Mentions MCP_API_KEY with X-Api-Key or bearer token",
+          "passed": false,
+          "evidence": "Only generic advice: 'Add auth or network restrictions if the port is exposed'. No MCP_API_KEY, X-Api-Key, or bearer token."
+        },
+        {
+          "text": "Does not claim pos-tools or table-status are available over HTTP",
+          "passed": true,
+          "evidence": "The response only discusses the table-occupancy server and makes no claims about pos-tools or table-status over HTTP."
+        }
+      ],
+      "notes": [
+        "Response states entrypoints, port and path are placeholders"
+      ]
+    },
+    {
+      "eval_id": 3,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.33,
+        "passed": 1,
+        "failed": 2,
+        "total": 3,
+        "time_seconds": 25.6,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "States table-occupancy and store-activity tools take table_ref",
+          "passed": false,
+          "evidence": "Response says table-occupancy tools take table_ref, but never mentions store-activity tools."
+        },
+        {
+          "text": "States the table-status server takes table_id",
+          "passed": false,
+          "evidence": "Response only vaguely says 'other servers may name table parameters differently'; table-status/table_id never stated."
+        },
+        {
+          "text": "Gives an example id such as table-4",
+          "passed": true,
+          "evidence": "Response: table_ref: 'table-4' in example call."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 4,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.0,
+        "passed": 0,
+        "failed": 3,
+        "total": 3,
+        "time_seconds": 32.5,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Sets API_SERVER_ENABLED, API_SERVER_PORT=3001, API_SERVER_HOST and API_SERVER_KEY",
+          "passed": false,
+          "evidence": "response.md sets API_SERVER_ENABLED=true, API_SERVER_HOST, API_SERVER_KEY, but API_SERVER_PORT=8642, not 3001."
+        },
+        {
+          "text": "Says API_SERVER_KEY must equal the backend HERMES_API_KEY",
+          "passed": false,
+          "evidence": "It says to set the UI API key to match API_SERVER_KEY; HERMES_API_KEY and the backend are never mentioned."
+        },
+        {
+          "text": "Mentions the 64K minimum context for the model",
+          "passed": false,
+          "evidence": "Only advises an Ollama num_ctx of 16k or more; no 64K minimum."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 5,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0,
+        "passed": 0,
+        "failed": 3,
+        "total": 3,
+        "time_seconds": 23.6,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Uses get_dirty_duration_stats from table-occupancy for the duration question",
+          "passed": false,
+          "evidence": "Response names the table-occupancy server but no specific tool; says derive from transition events if no dedicated tool. get_dirty_duration_stats never mentioned; nothing was actually called."
+        },
+        {
+          "text": "Uses mark_table_cleared for the action",
+          "passed": false,
+          "evidence": "Suggests guessed names 'set_table_status' or 'clear_table'; mark_table_cleared is not used or named."
+        },
+        {
+          "text": "States that intent should be confirmed or restated before calling mark_table_cleared",
+          "passed": false,
+          "evidence": "It says to check state first and ask staff to confirm only if the table is occupied. It doesn't say to confirm or restate intent before the write, and mark_table_cleared isn't named."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 6,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 1,
+        "failed": 0,
+        "total": 1,
+        "time_seconds": 26.7,
+        "tokens": 4101,
+        "tool_calls": 1,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Provides a complete MCP server implementation for the weather API request",
+          "passed": true,
+          "evidence": "outputs/response.md contains a full weather_server.py: FastMCP server, async httpx helpers, geocoding, two tools (get_current_weather, get_forecast) with error handling, a __main__ runner, plus install, test (mcp dev) and client registration instructions."
+        }
+      ],
+      "notes": [
+        "Code untested"
+      ]
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 31.8,
+        "stddev": 5.6427,
+        "min": 24.3,
+        "max": 41.5
+      },
+      "tokens": {
+        "mean": 297.8333,
+        "stddev": 465.9332,
+        "min": 0,
+        "max": 996
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.2767,
+        "stddev": 0.3895,
+        "min": 0.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 27.4667,
+        "stddev": 3.4645,
+        "min": 23.6,
+        "max": 32.5
+      },
+      "tokens": {
+        "mean": 683.5,
+        "stddev": 1674.2262,
+        "min": 0,
+        "max": 4101
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.72",
+      "time_seconds": "+4.3",
+      "tokens": "-386"
+    }
+  },
+  "notes": []
+}
