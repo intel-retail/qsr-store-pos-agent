@@ -21,6 +21,9 @@ const { EVENT_TYPES } = require('./envelope');
 // query window opens is never missed, without scanning the whole table.
 const BOUNDARY_LOOKBACK_DAYS = 1;
 
+// Far beyond a real dirty-to-cleared gap (<=20min), so an older open dirty mark means the clear was never recorded.
+const STALE_DIRTY_HOURS = 24;
+
 /** Shifts a YYYY-MM-DD date string by `deltaDays` (may be negative). */
 function shiftDate(dateStr, deltaDays) {
   const d = new Date(`${dateStr}T00:00:00.000Z`);
@@ -154,15 +157,20 @@ class TableEventLog extends BaseEventLog {
     }, options);
   }
 
-  /** Refs whose latest state-change event is table.dirty, i.e. tables waiting to be cleared right now. */
+  /**
+   * Refs whose latest state-change event is table.dirty, i.e. tables waiting to be cleared right now.
+   * A dirty mark more than STALE_DIRTY_HOURS older than the newest event is treated as a lost clear.
+   */
   async getDirtyTableRefs({ experience }) {
     const result = await this.pool.query(
       `SELECT ref FROM (
-         SELECT DISTINCT ON (ref) ref, event_type FROM ${this.tableName}
+         SELECT DISTINCT ON (ref) ref, event_type, occurred_at FROM ${this.tableName}
          WHERE experience = $1 AND event_type IN ('${EVENT_TYPES.TABLE_OCCUPIED}', '${EVENT_TYPES.TABLE_DIRTY}', '${EVENT_TYPES.TABLE_CLEARED}')
          ORDER BY ref, occurred_at DESC, id DESC
-       ) latest WHERE event_type = '${EVENT_TYPES.TABLE_DIRTY}'`,
-      [experience]
+       ) latest
+       WHERE event_type = '${EVENT_TYPES.TABLE_DIRTY}'
+         AND occurred_at >= (SELECT MAX(occurred_at) FROM ${this.tableName} WHERE experience = $1) - make_interval(hours => $2)`,
+      [experience, STALE_DIRTY_HOURS]
     );
     return result.rows.map((r) => r.ref);
   }
