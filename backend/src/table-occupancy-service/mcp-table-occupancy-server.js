@@ -137,7 +137,7 @@ async function handleGetUtilization(args, experience) {
     tableRef: args.table_ref,
     startDate: optionalSimDate(args.start_date, 'start_date'),
     endDate: optionalSimDate(args.end_date, 'end_date'),
-    nowMs: await currentTimeMs(getLog(), SOURCE),
+    nowMs: await currentTimeMs(getLog(), SOURCE, experience),
   });
 }
 
@@ -147,7 +147,7 @@ async function handleGetDirtyDurationStats(args, experience) {
     tableRef: args.table_ref,
     startDate: optionalSimDate(args.start_date, 'start_date'),
     endDate: optionalSimDate(args.end_date, 'end_date'),
-    nowMs: await currentTimeMs(getLog(), SOURCE),
+    nowMs: await currentTimeMs(getLog(), SOURCE, experience),
   });
 }
 
@@ -165,7 +165,7 @@ async function markTable(args, experience, eventType) {
     source: actionSource(SOURCE),
     experience,
     ref: args.table_ref,
-    ...(await actionTiming(getLog(), SOURCE)),
+    ...(await actionTiming(getLog(), SOURCE, experience)),
     payload: { via: 'mcp-action' },
   });
   await appendAndPublish(getLog(), getHub(), envelope);

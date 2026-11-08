@@ -119,7 +119,7 @@ async function main() {
   app.post(`${ROUTE_PREFIX}/actions/mark-table-cleared`, ...writeGuards, asyncHandler(async (req, res) => {
     const tableRef = req.body?.table_ref;
     if (!tableRef) throw badRequest('table_ref is required');
-    const timing = await actionTiming(log, SOURCE);
+    const timing = await actionTiming(log, SOURCE, req.body?.experience || EXPERIENCE);
     const envelope = buildActionEnvelope(() => createEnvelope({
       eventType: EVENT_TYPES.TABLE_CLEARED,
       severity: SEVERITIES.INFO,
@@ -136,7 +136,7 @@ async function main() {
   app.post(`${ROUTE_PREFIX}/actions/inject-event`, ...writeGuards, asyncHandler(async (req, res) => {
     const eventType = req.body?.event_type;
     if (!Object.values(EVENT_TYPES).includes(eventType)) throw badRequest(`Unknown event_type: ${eventType}`);
-    const timing = await actionTiming(log, SOURCE);
+    const timing = await actionTiming(log, SOURCE, req.body?.experience || EXPERIENCE);
     const envelope = buildActionEnvelope(() => createEnvelope({
       eventType,
       severity: req.body?.severity || SEVERITIES.INFO,

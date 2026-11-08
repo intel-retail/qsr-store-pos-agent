@@ -20,15 +20,15 @@ async function appendAndPublish(log, hub, envelope) {
  * stamps the simulation clock (the latest logged event), since accelerated live mode runs
  * ahead of today's date and wall-clock stamps would sort before the sim's own events.
  */
-async function actionTiming(log, source) {
-  const latest = source === 'real' ? null : await log.latestEvent();
+async function actionTiming(log, source, experience) {
+  const latest = source === 'real' ? null : await log.latestEvent({ experience });
   if (!latest) return { simDate: todayUtc() };
   return { simDate: latest.sim_date, occurredAt: new Date(latest.occurred_at).toISOString() };
 }
 
 /** "Now" in ms: wall clock for a real source, the latest logged event for a sim (see actionTiming). */
-async function currentTimeMs(log, source) {
-  const latest = source === 'real' ? null : await log.latestEvent();
+async function currentTimeMs(log, source, experience) {
+  const latest = source === 'real' ? null : await log.latestEvent({ experience });
   return latest ? new Date(latest.occurred_at).getTime() : Date.now();
 }
 

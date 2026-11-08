@@ -8,7 +8,7 @@
     "dev": "nodemon src/server.js",
     "mcp": "node src/mcp-server.js",
     "mcp:tables": "node src/mcp-table-status.js",
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

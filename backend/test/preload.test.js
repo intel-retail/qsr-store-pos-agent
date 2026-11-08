@@ -13,14 +13,14 @@ const { BaseEventLog } = require('../src/service-common/eventLog');
 
 const DAY_EVENTS = 10;
 
-// `counts`: date -> rows already stored; every day's full schedule is DAY_EVENTS long.
+// `counts`: date -> schedule events already stored; every day's full schedule is DAY_EVENTS long.
 function fakeProducer({ counts = {} }) {
   const calls = { materialized: [], live: 0 };
   return {
     calls,
     experience: 'cafe',
-    generateSchedule: () => new Array(DAY_EVENTS),
-    log: { countsByDay: async () => new Map(Object.entries(counts)) },
+    generateSchedule: (d) => Array.from({ length: DAY_EVENTS }, (_, i) => ({ event_id: `${d}|${i}` })),
+    log: { countStored: async (ids) => counts[ids[0].split('|')[0]] || 0 },
     materializeDay: async (d) => { calls.materialized.push(d); return { total: 1, inserted: 1, skipped: 0 }; },
     runLive: async () => { calls.live++; return 0; },
   };

@@ -36,6 +36,13 @@ function clipOverlapMs(startMs, endMs, periodStart, periodEnd) {
   return e > s ? e - s : 0;
 }
 
+/** Like a positive clipOverlapMs, but also keeps a zero-length session (e.g. dirty right now) that lies inside the period. */
+function touchesPeriod(startMs, endMs, periodStart, periodEnd) {
+  if (periodStart == null || periodEnd == null) return false;
+  if (endMs > startMs) return clipOverlapMs(startMs, endMs, periodStart, periodEnd) > 0;
+  return startMs >= periodStart && startMs <= periodEnd;
+}
+
 /**
  * Pairs table.occupied -> table.dirty rows per table into sessions. A session
  * with no matching table.dirty yet (still occupied, or the queried window
@@ -145,6 +152,19 @@ class TableEventLog extends BaseEventLog {
       refRequired: true,
       indexColumns: ['ref', 'occurred_at', 'sim_date'],
     }, options);
+  }
+
+  /** Refs whose latest state-change event is table.dirty, i.e. tables waiting to be cleared right now. */
+  async getDirtyTableRefs({ experience }) {
+    const result = await this.pool.query(
+      `SELECT ref FROM (
+         SELECT DISTINCT ON (ref) ref, event_type FROM ${this.tableName}
+         WHERE experience = $1 AND event_type IN ('${EVENT_TYPES.TABLE_OCCUPIED}', '${EVENT_TYPES.TABLE_DIRTY}', '${EVENT_TYPES.TABLE_CLEARED}')
+         ORDER BY ref, occurred_at DESC, id DESC
+       ) latest WHERE event_type = '${EVENT_TYPES.TABLE_DIRTY}'`,
+      [experience]
+    );
+    return result.rows.map((r) => r.ref);
   }
 
   /** Per-table state-change timeline, most recent first. */
@@ -259,7 +279,7 @@ class TableEventLog extends BaseEventLog {
       // crosses into the requested period from before it isn't missed — not
       // to admit one that both starts and ends entirely before the period,
       // which would otherwise inflate these stats with out-of-range data.
-      if (clipOverlapMs(session.dirtyAt, clearedAtMs, periodStart, periodEnd) <= 0) continue;
+      if (!touchesPeriod(session.dirtyAt, clearedAtMs, periodStart, periodEnd)) continue;
       const seconds = Math.round((clearedAtMs - session.dirtyAt) / 1000);
       if (seconds < 0) continue; // guards a clock/ordering anomaly rather than reporting a negative duration
       if (!byTable.has(session.ref)) byTable.set(session.ref, []);

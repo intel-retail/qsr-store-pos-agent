@@ -21,13 +21,15 @@ class HourlyProducer extends ScheduledProducer {
   }
 }
 
-function setup({ latest }) {
+function setup({ latest, missing = [] }) {
   const published = [];
   const backfilled = [];
+  const tailMs = latest ? new Date(latest.occurred_at).getTime() : -Infinity;
   const log = {
     latestEvent: async () => latest,
     appendMany: async (envs) => { backfilled.push(...envs.map((e) => e.event_id)); return envs.length; },
-    append: async (env) => env,
+    // Like the real log: an id that is already stored (at or before the tail, unless listed in `missing`) is not re-inserted.
+    append: async (env) => (new Date(env.occurred_at).getTime() <= tailMs && !missing.includes(env.event_id) ? null : env),
   };
   const hub = { publish: (env) => published.push(env.event_id) };
   const producer = new HourlyProducer({ label: 't', log, hub, seed: 's' });
@@ -52,9 +54,16 @@ test('without resume the whole day is published from the start', async (t) => {
 test('resume publishes only what is after the stored tail and backfills the rest silently', async (t) => {
   const latest = { occurred_at: new Date(hourMs(10)), sim_date: DAY }; // 10:00 = event index 3
   const { producer, published, backfilled } = setup({ latest });
-  assert.equal(await run(t, producer, { resume: true }), 6);
-  assert.deepEqual(backfilled, [0, 1, 2, 3].map((i) => `${DAY}-${i}`));
+  assert.equal(await run(t, producer, { resume: true }), 7);
+  assert.deepEqual(backfilled, [0, 1, 2].map((i) => `${DAY}-${i}`));
   assert.deepEqual(published, [4, 5, 6, 7, 8, 9].map((i) => `${DAY}-${i}`));
+});
+
+test('resume publishes a sibling event at the tail instant that was never stored', async (t) => {
+  const latest = { occurred_at: new Date(hourMs(10)), sim_date: DAY };
+  const { producer, published } = setup({ latest, missing: [`${DAY}-3`] });
+  await run(t, producer, { resume: true });
+  assert.deepEqual(published, [3, 4, 5, 6, 7, 8, 9].map((i) => `${DAY}-${i}`));
 });
 
 test('resume continues on a later stored day instead of replaying today', async (t) => {

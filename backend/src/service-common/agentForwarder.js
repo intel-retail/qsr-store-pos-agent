@@ -90,7 +90,10 @@ function attachAgentForwarder({ hub, label, service, defaultEventTypes, defaultF
       body: JSON.stringify(event),
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (res.status === 429 || res.status >= 500) throw Object.assign(new Error(`HTTP ${res.status}`), { retry: true });
+    if (res.status === 429 || res.status >= 500) {
+      try { await res.body?.cancel(); } catch { /* body already consumed */ }
+      throw Object.assign(new Error(`HTTP ${res.status}`), { retry: true });
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
     return res.json().catch(() => ({}));
   }

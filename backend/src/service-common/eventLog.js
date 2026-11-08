@@ -180,21 +180,24 @@ class BaseEventLog {
     return result.rows;
   }
 
-  /** Map of YYYY-MM-DD -> stored event count for the given `dates` (days with no events are absent). */
-  async countsByDay({ experience, dates }) {
+  /** Most recent event by occurred_at (of one experience when given); for SOURCE=sim this is the simulation clock. */
+  async latestEvent({ experience } = {}) {
     const result = await this.pool.query(
-      `SELECT sim_date::text AS day, COUNT(*)::int AS n FROM ${this.tableName} WHERE experience = $1 AND sim_date = ANY($2::date[]) GROUP BY sim_date`,
-      [experience, dates]
-    );
-    return new Map(result.rows.map((r) => [r.day, r.n]));
-  }
-
-  /** Most recent event by occurred_at; for SOURCE=sim this is the simulation clock. */
-  async latestEvent() {
-    const result = await this.pool.query(
-      `SELECT occurred_at, sim_date::text AS sim_date FROM ${this.tableName} ORDER BY occurred_at DESC, id DESC LIMIT 1`
+      `SELECT occurred_at, sim_date::text AS sim_date FROM ${this.tableName}
+       WHERE ($1::text IS NULL OR experience = $1) ORDER BY occurred_at DESC, id DESC LIMIT 1`,
+      [experience ?? null]
     );
     return result.rows[0] || null;
+  }
+
+  /** How many of the given deterministic event ids are already stored. */
+  async countStored(eventIds) {
+    if (eventIds.length === 0) return 0;
+    const result = await this.pool.query(
+      `SELECT COUNT(*)::int AS n FROM ${this.tableName} WHERE event_id = ANY($1::uuid[])`,
+      [eventIds]
+    );
+    return result.rows[0].n;
   }
 
   /** Cheap connectivity check for the health route — throws if the DB is unreachable. */

@@ -45,7 +45,8 @@ async function main() {
   hub.connectMqtt();
 
   // One dirty table is routine; the agent only hears when dirty tables pile up (first crossing of the threshold).
-  const dirtyTables = new Set();
+  // Seeded from the log so a restart does not undercount tables that were already dirty.
+  const dirtyTables = new Set(await log.getDirtyTableRefs({ experience: EXPERIENCE }));
   hub.on('event', (e) => {
     if (e.event_type === EVENT_TYPES.TABLE_DIRTY) dirtyTables.add(e.ref);
     else if (e.event_type === EVENT_TYPES.TABLE_CLEARED || e.event_type === EVENT_TYPES.TABLE_OCCUPIED) dirtyTables.delete(e.ref);
@@ -84,13 +85,15 @@ async function main() {
   });
 
   app.get(`${ROUTE_PREFIX}/utilization`, asyncHandler(async (req, res) => {
-    const nowMs = await currentTimeMs(log, SOURCE);
-    res.json(await log.getUtilization({ ...statsFilters(req.query), nowMs }));
+    const filters = statsFilters(req.query);
+    const nowMs = await currentTimeMs(log, SOURCE, filters.experience);
+    res.json(await log.getUtilization({ ...filters, nowMs }));
   }));
 
   app.get(`${ROUTE_PREFIX}/dirty-duration`, asyncHandler(async (req, res) => {
-    const nowMs = await currentTimeMs(log, SOURCE);
-    res.json(await log.getDirtyDurationStats({ ...statsFilters(req.query), nowMs }));
+    const filters = statsFilters(req.query);
+    const nowMs = await currentTimeMs(log, SOURCE, filters.experience);
+    res.json(await log.getDirtyDurationStats({ ...filters, nowMs }));
   }));
 
   app.get(`${ROUTE_PREFIX}/history`, asyncHandler(async (req, res) => {
@@ -107,7 +110,7 @@ async function main() {
   const markTable = (eventType) => asyncHandler(async (req, res) => {
     const tableRef = req.body?.table_ref;
     if (!tableRef) throw badRequest('table_ref is required');
-    const timing = await actionTiming(log, SOURCE);
+    const timing = await actionTiming(log, SOURCE, req.body?.experience || EXPERIENCE);
     const envelope = buildActionEnvelope(() => createEnvelope({
       eventType,
       severity: SEVERITIES.INFO,

@@ -129,6 +129,18 @@ test('a transient failure is retried with the same event', async () => {
   forwarder.stop();
 });
 
+test('a retryable response body is cancelled so the connection is released', async () => {
+  let cancelled = 0;
+  let n = 0;
+  const { hub, forwarder } = setup({
+    fetchImpl: async () => (++n === 1 ? { ...response(503), body: { cancel: async () => { cancelled += 1; } } } : response(202)),
+  });
+  hub.emit('event', envelope());
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  assert.equal(cancelled, 1);
+  forwarder.stop();
+});
+
 test('counts duplicates reported by the agent', async () => {
   const { hub, forwarder } = setup({ fetchImpl: async () => response(202, { ok: true, duplicate: true }) });
   hub.emit('event', envelope());

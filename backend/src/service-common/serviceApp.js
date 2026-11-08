@@ -199,12 +199,15 @@ async function startProducer({ label, routePrefix, config, producer }) {
     console.log(`[${label}] SOURCE=real — internal producer disabled, waiting for POST ${routePrefix}/ingest`);
     return null;
   }
-  // A day is complete once it holds the full deterministic schedule; shorter days (interrupted
+  // A day is complete once every deterministic schedule id is stored; others (interrupted
   // preload, or cut off mid-day by the live producer) are re-materialized, which only adds the gaps.
   if (config.PRELOAD_DAYS > 0) {
     const dates = pastDates(config.PRELOAD_DAYS);
-    const counts = await producer.log.countsByDay({ experience: producer.experience, dates });
-    const incomplete = dates.filter((d) => (counts.get(d) || 0) < producer.generateSchedule(d).length);
+    const incomplete = [];
+    for (const d of dates) {
+      const ids = producer.generateSchedule(d).map((e) => e.event_id);
+      if (await producer.log.countStored(ids) < ids.length) incomplete.push(d);
+    }
     if (incomplete.length > 0) {
       await materializeDates(producer, incomplete);
       console.log(`[${label}] preloaded ${incomplete.length} missing or incomplete day(s) of history`);

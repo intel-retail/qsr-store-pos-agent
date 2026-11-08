@@ -94,7 +94,7 @@ class ScheduledProducer {
     const pacedSpeed = speed > 0 ? speed : 1; // guard against 0/negative speed silently firing everything at once
     let tailMs = -Infinity;
     if (resume) {
-      const latest = await this.log.latestEvent();
+      const latest = await this.log.latestEvent({ experience: this.experience });
       if (latest) {
         tailMs = new Date(latest.occurred_at).getTime();
         if (latest.sim_date > simDate) simDate = latest.sim_date;
@@ -104,7 +104,8 @@ class ScheduledProducer {
     const { dayStartMs } = dayBounds(simDate);
     const startedAt = Date.now() - Math.max(0, tailMs - dayStartMs) / pacedSpeed;
 
-    const isStored = (envelope) => new Date(envelope.occurred_at).getTime() <= tailMs;
+    // Events at the tail instant still go through append(), which skips stored ids, so a crash between simultaneous appends loses no sibling.
+    const isStored = (envelope) => new Date(envelope.occurred_at).getTime() < tailMs;
     const stored = schedule.filter(isStored);
     const pending = schedule.filter((e) => !isStored(e));
     if (stored.length > 0) await this.log.appendMany(stored);

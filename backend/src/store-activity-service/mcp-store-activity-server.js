@@ -185,7 +185,7 @@ async function handleMarkTableCleared(args, experience) {
     source: actionSource(SOURCE),
     experience,
     ref: args.table_ref,
-    ...(await actionTiming(getLog(), SOURCE)),
+    ...(await actionTiming(getLog(), SOURCE, experience)),
     payload: { via: 'mcp-action' },
   });
   await appendAndPublish(getLog(), getHub(), envelope);
@@ -202,7 +202,7 @@ async function handleInjectEvent(args, experience) {
     source: actionSource(SOURCE),
     experience,
     ref: args.ref || null,
-    ...(await actionTiming(getLog(), SOURCE)),
+    ...(await actionTiming(getLog(), SOURCE, experience)),
     payload: args.payload || {},
   });
   await appendAndPublish(getLog(), getHub(), envelope);
