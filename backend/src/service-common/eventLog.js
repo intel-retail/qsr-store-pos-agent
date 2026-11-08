@@ -17,6 +17,23 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const { envInt } = require('./config');
 
 const TABLE_NAME_PATTERN = /^[a-z_][a-z0-9_]*$/;
+const INSERT_COLUMNS = '(event_id, experience, event_type, severity, source, ref, occurred_at, sim_date, seed, payload)';
+const INSERT_CHUNK_ROWS = 500; // 10 params per row, well under pg's 65535 limit
+
+function envelopeParams(envelope) {
+  return [
+    envelope.event_id,
+    envelope.experience,
+    envelope.event_type,
+    envelope.severity,
+    envelope.source,
+    envelope.ref,
+    envelope.occurred_at,
+    envelope.sim_date,
+    envelope.seed,
+    JSON.stringify(envelope.payload || {}),
+  ];
+}
 
 class BaseEventLog {
   /**
@@ -79,25 +96,46 @@ class BaseEventLog {
    */
   async append(envelope) {
     const result = await this.pool.query(
-      `INSERT INTO ${this.tableName}
-        (event_id, experience, event_type, severity, source, ref, occurred_at, sim_date, seed, payload)
+      `INSERT INTO ${this.tableName} ${INSERT_COLUMNS}
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
        ON CONFLICT (event_id) DO NOTHING
        RETURNING *`,
-      [
-        envelope.event_id,
-        envelope.experience,
-        envelope.event_type,
-        envelope.severity,
-        envelope.source,
-        envelope.ref,
-        envelope.occurred_at,
-        envelope.sim_date,
-        envelope.seed,
-        JSON.stringify(envelope.payload || {}),
-      ]
+      envelopeParams(envelope)
     );
     return result.rows[0] || null;
+  }
+
+  /**
+   * Bulk append in one transaction (all or nothing), skipping event_ids already
+   * present. Returns how many rows were newly inserted. Used for history preload,
+   * where a day is either fully recorded or absent.
+   */
+  async appendMany(envelopes) {
+    if (envelopes.length === 0) return 0;
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      let inserted = 0;
+      for (let i = 0; i < envelopes.length; i += INSERT_CHUNK_ROWS) {
+        const chunk = envelopes.slice(i, i + INSERT_CHUNK_ROWS);
+        const placeholders = chunk.map((_, row) => {
+          const base = row * 10;
+          return `(${Array.from({ length: 9 }, (__, k) => `$${base + k + 1}`).join(', ')}, $${base + 10}::jsonb)`;
+        });
+        const result = await client.query(
+          `INSERT INTO ${this.tableName} ${INSERT_COLUMNS} VALUES ${placeholders.join(', ')} ON CONFLICT (event_id) DO NOTHING`,
+          chunk.flatMap(envelopeParams)
+        );
+        inserted += result.rowCount;
+      }
+      await client.query('COMMIT');
+      return inserted;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   /** Poll-based tail: events appended after `sinceId`, oldest first. */
@@ -140,6 +178,23 @@ class BaseEventLog {
       [experience, simDate]
     );
     return result.rows;
+  }
+
+  /** Map of YYYY-MM-DD -> stored event count for the given `dates` (days with no events are absent). */
+  async countsByDay({ experience, dates }) {
+    const result = await this.pool.query(
+      `SELECT sim_date::text AS day, COUNT(*)::int AS n FROM ${this.tableName} WHERE experience = $1 AND sim_date = ANY($2::date[]) GROUP BY sim_date`,
+      [experience, dates]
+    );
+    return new Map(result.rows.map((r) => [r.day, r.n]));
+  }
+
+  /** Most recent event by occurred_at; for SOURCE=sim this is the simulation clock. */
+  async latestEvent() {
+    const result = await this.pool.query(
+      `SELECT occurred_at, sim_date::text AS sim_date FROM ${this.tableName} ORDER BY occurred_at DESC, id DESC LIMIT 1`
+    );
+    return result.rows[0] || null;
   }
 
   /** Cheap connectivity check for the health route — throws if the DB is unreachable. */

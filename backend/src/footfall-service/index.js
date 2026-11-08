@@ -13,6 +13,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const { FootfallEventLog } = require('./eventLog');
 const { EventHub } = require('../service-common/hub');
+const { attachAgentForwarder } = require('../service-common/agentForwarder');
 const { FootfallProducer } = require('./producer');
 const { EVENT_TYPES, validateEnvelope } = require('./envelope');
 const { loadCommonConfig, envInt, parseCorsOrigins } = require('../service-common/config');
@@ -38,6 +39,11 @@ async function main() {
 
   const hub = new EventHub({ enabled: !BENCHMARK, mqttTopicPrefix: 'footfall-sim' });
   hub.connectMqtt();
+  attachAgentForwarder({
+    hub, label: LABEL, service: LABEL, config,
+    defaultEventTypes: [EVENT_TYPES.ZONE_DENSITY_CHANGED],
+    defaultFilter: (e) => e.payload?.density === 'high',
+  });
 
   const { app, start } = createServiceApp({
     label: LABEL,

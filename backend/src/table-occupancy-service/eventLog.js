@@ -87,9 +87,9 @@ function pairOccupiedDirty(rows) {
  * very last observed event) measure as ~0 duration instead of "ongoing,
  * elapsed so far".
  */
-function computePeriodBounds({ startDate, endDate, observedStart }) {
+function computePeriodBounds({ startDate, endDate, observedStart, nowMs }) {
   const periodStart = startDate ? new Date(`${startDate}T00:00:00.000Z`).getTime() : observedStart;
-  const periodEnd = endDate ? new Date(`${endDate}T23:59:59.999Z`).getTime() : Date.now();
+  const periodEnd = endDate ? new Date(`${endDate}T23:59:59.999Z`).getTime() : nowMs;
   const periodMs = (periodStart != null && periodEnd != null) ? periodEnd - periodStart : 0;
   return { periodStart, periodEnd, periodMs };
 }
@@ -160,7 +160,7 @@ class TableEventLog extends BaseEventLog {
       `SELECT event_type, severity, source, occurred_at, sim_date::text AS sim_date, payload
        FROM ${this.tableName}
        WHERE ${clauses.join(' AND ')}
-       ORDER BY occurred_at DESC LIMIT $${params.length}`,
+       ORDER BY occurred_at DESC, id DESC LIMIT $${params.length}`,
       params
     );
     return result.rows;
@@ -186,7 +186,7 @@ class TableEventLog extends BaseEventLog {
    * isn't dropped; a session still open at the end of the window (or right
    * now) counts its overlap with the window rather than being skipped.
    */
-  async getUtilization({ experience, tableRef, startDate, endDate } = {}) {
+  async getUtilization({ experience, tableRef, startDate, endDate, nowMs = Date.now() } = {}) {
     const queryStartDate = startDate ? shiftDate(startDate, -BOUNDARY_LOOKBACK_DAYS) : undefined;
     const { where, params } = this._buildFilters(
       { experience, tableRef, startDate: queryStartDate, endDate },
@@ -196,12 +196,12 @@ class TableEventLog extends BaseEventLog {
     const result = await this.pool.query(
       `SELECT ref, event_type, occurred_at FROM ${this.tableName}
        WHERE ${where}
-       ORDER BY ref, occurred_at ASC`,
+       ORDER BY ref, occurred_at ASC, id ASC`,
       params
     );
 
     const { sessions, observedStart } = pairOccupiedDirty(result.rows);
-    const { periodStart, periodEnd, periodMs } = computePeriodBounds({ startDate, endDate, observedStart });
+    const { periodStart, periodEnd, periodMs } = computePeriodBounds({ startDate, endDate, observedStart, nowMs });
 
     const byTable = new Map();
     for (const session of sessions) {
@@ -234,7 +234,7 @@ class TableEventLog extends BaseEventLog {
    * too, measured up to the end of the window (or now) — this is exactly the
    * "has been sitting dirty for N minutes and counting" case the tool exists for.
    */
-  async getDirtyDurationStats({ experience, tableRef, startDate, endDate } = {}) {
+  async getDirtyDurationStats({ experience, tableRef, startDate, endDate, nowMs = Date.now() } = {}) {
     const queryStartDate = startDate ? shiftDate(startDate, -BOUNDARY_LOOKBACK_DAYS) : undefined;
     const { where, params } = this._buildFilters(
       { experience, tableRef, startDate: queryStartDate, endDate },
@@ -244,12 +244,12 @@ class TableEventLog extends BaseEventLog {
     const result = await this.pool.query(
       `SELECT ref, event_type, occurred_at FROM ${this.tableName}
        WHERE ${where}
-       ORDER BY ref, occurred_at ASC`,
+       ORDER BY ref, occurred_at ASC, id ASC`,
       params
     );
 
     const { sessions, observedStart } = pairDirtyCleared(result.rows);
-    const { periodStart, periodEnd } = computePeriodBounds({ startDate, endDate, observedStart });
+    const { periodStart, periodEnd } = computePeriodBounds({ startDate, endDate, observedStart, nowMs });
 
     const byTable = new Map();
     const overall = [];

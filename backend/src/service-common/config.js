@@ -80,6 +80,7 @@ function loadCommonConfig() {
     EXPERIENCE: process.env.SIM_EXPERIENCE || 'cafe',
     SEED: process.env.SIM_SEED || 'edgemart-default-seed',
     SPEED: envPositiveNumber('SIM_SPEED', 60),
+    PRELOAD_DAYS: envInt('SIM_PRELOAD_DAYS', 0, { min: 0, max: 365 }),
     REPLAY_DATE: replayDate,
   };
 }
