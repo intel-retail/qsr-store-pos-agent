@@ -22,6 +22,29 @@ class StoreActivityProducer extends ScheduledProducer {
   }
 
   /**
+   * Seats dine-in customers in seating order at their preferred table, probing to the
+   * next free one so a table is never double-booked. With every table busy the customer
+   * is demoted to takeout, which keeps table.* events consistent with the occupancy service.
+   */
+  _assignTables(customers) {
+    const busyUntil = new Array(this.tableCount).fill(-Infinity);
+    const seatOffset = (c) => c.arriveOffset + Math.floor(c.orderDelayMs / 2);
+    const diners = customers.filter((c) => c.dineIn).sort((a, b) => seatOffset(a) - seatOffset(b));
+
+    for (const c of diners) {
+      const seatAt = seatOffset(c);
+      const probe = [...Array(this.tableCount).keys()].find((i) => busyUntil[(c.preferredTable + i) % this.tableCount] < seatAt);
+      if (probe === undefined) {
+        c.dineIn = false;
+        continue;
+      }
+      const table = (c.preferredTable + probe) % this.tableCount;
+      c.tableRef = `table-${table + 1}`;
+      busyUntil[table] = c.arriveOffset + c.orderDelayMs + c.prepMs + c.dwellMs + c.cleanupMs;
+    }
+  }
+
+  /**
    * Pure function: the same (seed, experience, simDate) always returns the same
    * ordered list of envelopes.
    */
@@ -31,33 +54,39 @@ class StoreActivityProducer extends ScheduledProducer {
     const spanMs = dayEndMs - dayStartMs;
 
     const customerCount = 40 + Math.floor(rng() * 80); // 40-119 customers/day
-    const raw = [];
+    const customers = [];
 
     for (let c = 0; c < customerCount; c++) {
-      const arriveOffset = Math.floor(rng() * spanMs);
-      const dineIn = rng() < 0.4;
-      const customerRef = `${simDate}-cust-${c + 1}`;
+      const customer = {
+        ref: `${simDate}-cust-${c + 1}`,
+        arriveOffset: Math.floor(rng() * spanMs),
+        dineIn: rng() < 0.4,
+      };
+      customer.orderDelayMs = 30_000 + Math.floor(rng() * 90_000);
+      customer.prepMs = 60_000 + Math.floor(rng() * 180_000);
+      if (customer.dineIn) {
+        customer.preferredTable = Math.floor(rng() * this.tableCount);
+        customer.dwellMs = 300_000 + Math.floor(rng() * 900_000);
+        customer.cleanupMs = 60_000 + Math.floor(rng() * 240_000);
+      }
+      customers.push(customer);
+    }
 
+    this._assignTables(customers);
+
+    const raw = [];
+    for (const { ref: customerRef, arriveOffset, dineIn, orderDelayMs, prepMs, dwellMs, cleanupMs, tableRef } of customers) {
       raw.push({ offsetMs: arriveOffset, eventType: EVENT_TYPES.CUSTOMER_ARRIVED, ref: customerRef, payload: { dineIn } });
-
-      const orderDelayMs = 30_000 + Math.floor(rng() * 90_000);
       raw.push({ offsetMs: arriveOffset + orderDelayMs, eventType: EVENT_TYPES.ORDER_PLACED, ref: customerRef, payload: { dineIn } });
-
-      const prepMs = 60_000 + Math.floor(rng() * 180_000);
       raw.push({ offsetMs: arriveOffset + orderDelayMs + prepMs, eventType: EVENT_TYPES.ORDER_COMPLETED, ref: customerRef, payload: {} });
 
       if (dineIn) {
-        const tableId = 1 + Math.floor(rng() * this.tableCount);
-        const tableRef = `table-${tableId}`;
         const seatOffset = arriveOffset + Math.floor(orderDelayMs / 2);
         raw.push({ offsetMs: seatOffset, eventType: EVENT_TYPES.TABLE_OCCUPIED, ref: tableRef, payload: { customerRef } });
 
-        const dwellMs = 300_000 + Math.floor(rng() * 900_000);
         const departOffset = arriveOffset + orderDelayMs + prepMs + dwellMs;
         raw.push({ offsetMs: departOffset, eventType: EVENT_TYPES.CUSTOMER_DEPARTED, ref: customerRef, payload: {} });
         raw.push({ offsetMs: departOffset, eventType: EVENT_TYPES.TABLE_DIRTY, ref: tableRef, payload: { customerRef } });
-
-        const cleanupMs = 60_000 + Math.floor(rng() * 240_000);
         raw.push({ offsetMs: departOffset + cleanupMs, eventType: EVENT_TYPES.TABLE_CLEARED, ref: tableRef, payload: {} });
       } else {
         const departOffset = arriveOffset + orderDelayMs + prepMs + 30_000;

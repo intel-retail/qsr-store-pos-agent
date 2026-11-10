@@ -77,11 +77,7 @@ class ScheduledProducer {
    */
   async materializeDay(simDate) {
     const schedule = this.generateSchedule(simDate);
-    let inserted = 0;
-    for (const envelope of schedule) {
-      const saved = await this.log.append(envelope);
-      if (saved) inserted++;
-    }
+    const inserted = await this.log.appendMany(schedule);
     return { total: schedule.length, inserted, skipped: schedule.length - inserted };
   }
 
@@ -89,19 +85,37 @@ class ScheduledProducer {
    * Headless live production: walks the schedule for simDate, appending +
    * publishing each event as its (accelerated) time arrives. `speed` is a
    * multiplier — 60 means one sim-hour passes per real minute.
+   *
+   * With `resume`, the sim clock continues from the newest stored event (never
+   * backwards across restarts): later events are published as they come due, and
+   * earlier ones are only backfilled into the log, never re-published.
    */
-  async runLive({ simDate = new Date().toISOString().slice(0, 10), speed = 60 } = {}) {
+  async runLive({ simDate = new Date().toISOString().slice(0, 10), speed = 60, resume = false } = {}) {
     const pacedSpeed = speed > 0 ? speed : 1; // guard against 0/negative speed silently firing everything at once
+    let tailMs = -Infinity;
+    if (resume) {
+      const latest = await this.log.latestEvent({ experience: this.experience });
+      if (latest) {
+        tailMs = new Date(latest.occurred_at).getTime();
+        if (latest.sim_date > simDate) simDate = latest.sim_date;
+      }
+    }
     const schedule = this.generateSchedule(simDate);
     const { dayStartMs } = dayBounds(simDate);
-    const startedAt = Date.now();
+    const startedAt = Date.now() - Math.max(0, tailMs - dayStartMs) / pacedSpeed;
+
+    // Events at the tail instant still go through append(), which skips stored ids, so a crash between simultaneous appends loses no sibling.
+    const isStored = (envelope) => new Date(envelope.occurred_at).getTime() < tailMs;
+    const stored = schedule.filter(isStored);
+    const pending = schedule.filter((e) => !isStored(e));
+    if (stored.length > 0) await this.log.appendMany(stored);
 
     // By the time a day-rollover invokes this again, the previous day's timers
     // have all already fired — drop the stale references instead of growing
     // this array forever across an indefinitely-running live process.
     this._timers = [];
 
-    for (const envelope of schedule) {
+    for (const envelope of pending) {
       const offsetMs = new Date(envelope.occurred_at).getTime() - dayStartMs;
       const timer = setTimeout(() => {
         this.log.append(envelope)
@@ -115,7 +129,7 @@ class ScheduledProducer {
     // one's 24h (accelerated) span elapses, instead of silently going idle.
     this._scheduleNextDay(simDate, pacedSpeed, startedAt);
 
-    return schedule.length;
+    return pending.length;
   }
 
   /** Schedules the next calendar day's runLive() once a full accelerated day has elapsed. */

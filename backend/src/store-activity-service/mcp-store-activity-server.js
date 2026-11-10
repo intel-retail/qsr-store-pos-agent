@@ -21,8 +21,8 @@ const { EventHub } = require('../service-common/hub');
 const { EVENT_TYPES, SEVERITIES, createEnvelope } = require('./envelope');
 const { optionalSimDate, assertSimDate } = require('../service-common/envelope');
 const { connectTransport } = require('../service-common/mcpTransport');
-const { loadCommonConfig, todayUtc } = require('../service-common/config');
-const { appendAndPublish, actionSource } = require('../service-common/publish');
+const { loadCommonConfig } = require('../service-common/config');
+const { appendAndPublish, actionSource, actionTiming } = require('../service-common/publish');
 
 const { SOURCE, BENCHMARK, EXPERIENCE: EXPERIENCE_DEFAULT } = loadCommonConfig(); // SOURCE: 'sim' | 'real' — see STORE-ACTIVITY-SERVICE.md
 const SERVICE_NAME = 'store-activity-service';
@@ -185,7 +185,7 @@ async function handleMarkTableCleared(args, experience) {
     source: actionSource(SOURCE),
     experience,
     ref: args.table_ref,
-    simDate: todayUtc(),
+    ...(await actionTiming(getLog(), SOURCE, experience)),
     payload: { via: 'mcp-action' },
   });
   await appendAndPublish(getLog(), getHub(), envelope);
@@ -202,7 +202,7 @@ async function handleInjectEvent(args, experience) {
     source: actionSource(SOURCE),
     experience,
     ref: args.ref || null,
-    simDate: todayUtc(),
+    ...(await actionTiming(getLog(), SOURCE, experience)),
     payload: args.payload || {},
   });
   await appendAndPublish(getLog(), getHub(), envelope);

@@ -12,6 +12,23 @@
 
 const MAX_DAYS = 3650;
 
+/** The `days` UTC dates before today, oldest first. */
+function pastDates(days) {
+  const today = new Date();
+  return Array.from({ length: days }, (_, k) => {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() - (days - k));
+    return d.toISOString().slice(0, 10);
+  });
+}
+
+/** Materializes each date in order; `onDay` receives each day's result. */
+async function materializeDates(producer, dates, onDay = () => {}) {
+  for (const simDate of dates) {
+    onDay(simDate, await producer.materializeDay(simDate));
+  }
+}
+
 function parseArg(name, fallback) {
   const prefix = `--${name}=`;
   const match = process.argv.find((a) => a.startsWith(prefix));
@@ -38,14 +55,9 @@ async function runSeedHistory({ createLog, createProducer, config }) {
     await log.init();
     const producer = createProducer({ log, seed, experience });
 
-    const today = new Date();
-    for (let i = days; i >= 1; i--) {
-      const d = new Date(today);
-      d.setUTCDate(d.getUTCDate() - i);
-      const simDate = d.toISOString().slice(0, 10);
-      const { total, inserted, skipped } = await producer.materializeDay(simDate);
+    await materializeDates(producer, pastDates(days), (simDate, { total, inserted, skipped }) => {
       console.log(`[seed-history] ${simDate}: ${inserted} inserted, ${skipped} already present (${total} total)`);
-    }
+    });
     console.log(`[seed-history] done — ${days} day(s) preloaded for experience=${experience}, seed=${seed}`);
   } finally {
     await log.close();
@@ -60,4 +72,4 @@ function runSeedHistoryCli(opts) {
   });
 }
 
-module.exports = { runSeedHistory, runSeedHistoryCli };
+module.exports = { runSeedHistory, runSeedHistoryCli, pastDates, materializeDates };

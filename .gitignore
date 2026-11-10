@@ -48,8 +48,7 @@ temp/
 *.tmp
 *.temp
 
-# Optional: lock files (if you want to ignore them)
-package-lock.json
+# Optional: lock files (package-lock.json is committed)
 yarn.lock
 pnpm-lock.yaml
 

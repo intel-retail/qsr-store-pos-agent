@@ -18,8 +18,8 @@ const { EventHub } = require('../service-common/hub');
 const { EVENT_TYPES, SEVERITIES, createEnvelope } = require('./envelope');
 const { optionalSimDate } = require('../service-common/envelope');
 const { connectTransport } = require('../service-common/mcpTransport');
-const { loadCommonConfig, todayUtc } = require('../service-common/config');
-const { appendAndPublish, actionSource } = require('../service-common/publish');
+const { loadCommonConfig } = require('../service-common/config');
+const { appendAndPublish, actionSource, actionTiming, currentTimeMs } = require('../service-common/publish');
 
 const { SOURCE, BENCHMARK, EXPERIENCE: EXPERIENCE_DEFAULT } = loadCommonConfig();
 const SERVICE_NAME = 'table-occupancy-service';
@@ -131,21 +131,23 @@ function handleListEventTypes() {
   return Object.entries(TABLE_EVENT_TYPE_DESCRIPTIONS).map(([event_type, description]) => ({ event_type, description }));
 }
 
-function handleGetUtilization(args, experience) {
+async function handleGetUtilization(args, experience) {
   return getLog().getUtilization({
     experience,
     tableRef: args.table_ref,
     startDate: optionalSimDate(args.start_date, 'start_date'),
     endDate: optionalSimDate(args.end_date, 'end_date'),
+    nowMs: await currentTimeMs(getLog(), SOURCE, experience),
   });
 }
 
-function handleGetDirtyDurationStats(args, experience) {
+async function handleGetDirtyDurationStats(args, experience) {
   return getLog().getDirtyDurationStats({
     experience,
     tableRef: args.table_ref,
     startDate: optionalSimDate(args.start_date, 'start_date'),
     endDate: optionalSimDate(args.end_date, 'end_date'),
+    nowMs: await currentTimeMs(getLog(), SOURCE, experience),
   });
 }
 
@@ -163,7 +165,7 @@ async function markTable(args, experience, eventType) {
     source: actionSource(SOURCE),
     experience,
     ref: args.table_ref,
-    simDate: todayUtc(),
+    ...(await actionTiming(getLog(), SOURCE, experience)),
     payload: { via: 'mcp-action' },
   });
   await appendAndPublish(getLog(), getHub(), envelope);

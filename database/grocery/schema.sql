@@ -102,7 +102,10 @@ INSERT INTO categories (name, description) VALUES
 ('Beverages', 'Drinks and juices'),
 ('Snacks', 'Chips, cookies, and candy'),
 ('Frozen', 'Frozen meals and desserts'),
-('Household', 'Cleaning and household items');
+('Household', 'Cleaning and household items'),
+('Health & Beauty', 'Personal care and wellness items'),
+('Pet Supplies', 'Pet food and accessories'),
+('Baby', 'Diapers, formula, and baby care items');
 
 -- Seed data: Products
 INSERT INTO products (name, sku, barcode, category_id, price, cost, stock_quantity, unit) VALUES
@@ -125,7 +128,10 @@ INSERT INTO products (name, sku, barcode, category_id, price, cost, stock_quanti
 ('Chocolate Bar', 'PRD-017', '0011110001301', (SELECT id FROM categories WHERE name = 'Snacks'), 1.49, 0.70, 200, 'each'),
 ('Frozen Pizza', 'PRD-018', '0011110001401', (SELECT id FROM categories WHERE name = 'Frozen'), 6.99, 3.50, 50, 'each'),
 ('Ice Cream', 'PRD-019', '0011110001501', (SELECT id FROM categories WHERE name = 'Frozen'), 5.49, 3.00, 40, 'each'),
-('Paper Towels', 'PRD-020', '0011110001601', (SELECT id FROM categories WHERE name = 'Household'), 7.99, 4.50, 60, 'each');
+('Paper Towels', 'PRD-020', '0011110001601', (SELECT id FROM categories WHERE name = 'Household'), 7.99, 4.50, 60, 'each'),
+('Shampoo 12oz', 'PRD-021', '0011110001701', (SELECT id FROM categories WHERE name = 'Health & Beauty'), 5.99, 3.00, 55, 'each'),
+('Toothpaste', 'PRD-022', '0011110001801', (SELECT id FROM categories WHERE name = 'Health & Beauty'), 3.49, 1.60, 80, 'each'),
+('Dog Food 5lb', 'PRD-023', '0011110001901', (SELECT id FROM categories WHERE name = 'Pet Supplies'), 12.99, 7.50, 35, 'each');
 
 -- Seed data: Staff
 INSERT INTO staff (name, role, pin_code) VALUES

@@ -19,6 +19,7 @@ const { todayUtc } = require('./config');
 const { assertSimDate } = require('./envelope');
 const { requireApiKey } = require('./requireApiKey');
 const { appendAndPublish } = require('./publish');
+const { pastDates, materializeDates } = require('./seedHistory');
 
 /** Express 4 does not catch rejected promises from async handlers; route them to the error middleware. */
 function asyncHandler(fn) {
@@ -198,13 +199,24 @@ async function startProducer({ label, routePrefix, config, producer }) {
     console.log(`[${label}] SOURCE=real — internal producer disabled, waiting for POST ${routePrefix}/ingest`);
     return null;
   }
+  // A day is complete once it holds the full deterministic schedule for this seed; shorter days (interrupted
+  // preload, or cut off mid-day by the live producer) are re-materialized, which only adds the gaps.
+  if (config.PRELOAD_DAYS > 0) {
+    const dates = pastDates(config.PRELOAD_DAYS);
+    const counts = await producer.log.countsByDay({ experience: producer.experience, dates, seed: producer.seed });
+    const incomplete = dates.filter((d) => (counts.get(d) || 0) < producer.generateSchedule(d).length);
+    if (incomplete.length > 0) {
+      await materializeDates(producer, incomplete);
+      console.log(`[${label}] preloaded ${incomplete.length} missing or incomplete day(s) of history`);
+    }
+  }
   if (config.MODE === 'replay') {
     const count = await producer.runReplay({ simDate: config.REPLAY_DATE, speed: config.SPEED });
     console.log(`[${label}] replaying ${count} recorded events for ${config.REPLAY_DATE} at ${config.SPEED}x`);
   } else {
     const simDate = todayUtc();
-    const count = await producer.runLive({ simDate, speed: config.SPEED });
-    console.log(`[${label}] running live schedule (${count} events) for ${simDate} at ${config.SPEED}x, seed=${config.SEED}`);
+    const count = await producer.runLive({ simDate, speed: config.SPEED, resume: true });
+    console.log(`[${label}] running live schedule (${count} events pending) from ${simDate} at ${config.SPEED}x, seed=${config.SEED}`);
   }
   return producer;
 }

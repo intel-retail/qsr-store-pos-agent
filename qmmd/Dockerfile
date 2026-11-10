@@ -7,7 +7,7 @@ FROM rust:1-alpine AS build
 RUN apk add --no-cache musl-dev pkgconfig eudev-dev
 RUN cargo install --locked qmmd --root /usr/local
 
-FROM alpine:3.20
+FROM alpine:3.22
 RUN apk add --no-cache libgcc eudev-libs tini \
   && addgroup -S appgroup && adduser -S appuser -G appgroup
 COPY --from=build /usr/local/bin/qmmd /usr/local/bin/qmmd

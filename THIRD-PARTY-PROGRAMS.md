@@ -8,7 +8,7 @@ Third party programs and their corresponding required notices and/or license ter
 
 ## 1. MIT License
 
-- node:20-alpine (backend/Dockerfile, frontend/Dockerfile build stage) — hub.docker.com/_/node
+- node:24-alpine (backend/Dockerfile, frontend/Dockerfile build stage) — hub.docker.com/_/node
 - @modelcontextprotocol/sdk ^1.0.0 (backend/Dockerfile) — npmjs.com
 - cors ^2.8.5 (backend/Dockerfile) — npmjs.com
 - express ^4.18.2 (backend/Dockerfile) — npmjs.com
@@ -341,7 +341,7 @@ See the full MIT License text in Section 1 above and the full Apache License, Ve
 
 ## 11. Software released under multiple licenses ("MIT / various")
 
-- alpine:3.20 (qmmd/Dockerfile runtime stage) — hub.docker.com/_/alpine
+- alpine:3.22 (qmmd/Dockerfile runtime stage) — hub.docker.com/_/alpine
 
 The Alpine Linux base image is a distribution comprised of many independent packages (including musl libc, BusyBox, and apk-tools), each carrying its own license (predominantly MIT, with some BSD and GPL-licensed components). No single license applies to the image as a whole. Refer to [pkgs.alpinelinux.org](https://pkgs.alpinelinux.org) for the license of each constituent package.
 

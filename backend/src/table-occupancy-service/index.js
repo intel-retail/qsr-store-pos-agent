@@ -14,11 +14,12 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const { TableEventLog } = require('./eventLog');
 const { EventHub } = require('../service-common/hub');
+const { attachAgentForwarder } = require('../service-common/agentForwarder');
 const { TableOccupancyProducer } = require('./producer');
 const { EVENT_TYPES, SEVERITIES, createEnvelope, validateEnvelope } = require('./envelope');
-const { loadCommonConfig, loadTableCount, envInt, parseCorsOrigins, todayUtc } = require('../service-common/config');
+const { loadCommonConfig, loadTableCount, envInt, parseCorsOrigins } = require('../service-common/config');
 const { createServiceApp, startProducer, asyncHandler, badRequest, queryString, queryDate, queryLimit } = require('../service-common/serviceApp');
-const { appendAndPublish, actionSource } = require('../service-common/publish');
+const { appendAndPublish, actionSource, actionTiming, currentTimeMs } = require('../service-common/publish');
 
 const LABEL = 'table-occupancy-service';
 const ROUTE_PREFIX = '/table-occupancy';
@@ -42,6 +43,20 @@ async function main() {
 
   const hub = new EventHub({ enabled: !BENCHMARK, mqttTopicPrefix: 'table-sim' });
   hub.connectMqtt();
+
+  // One dirty table is routine; the agent only hears when dirty tables pile up (first crossing of the threshold).
+  // Seeded from the log so a restart does not undercount tables that were already dirty.
+  const dirtyTables = new Set(await log.getDirtyTableRefs({ experience: EXPERIENCE }));
+  hub.on('event', (e) => {
+    if (e.event_type === EVENT_TYPES.TABLE_DIRTY) dirtyTables.add(e.ref);
+    else if (e.event_type === EVENT_TYPES.TABLE_CLEARED || e.event_type === EVENT_TYPES.TABLE_OCCUPIED) dirtyTables.delete(e.ref);
+  });
+  const dirtyThreshold = envInt('QSR_AGENT_DIRTY_MIN_TABLES', Math.max(2, Math.ceil(TABLE_COUNT * 0.45)), { min: 1 });
+  attachAgentForwarder({
+    hub, label: LABEL, service: LABEL, config,
+    defaultEventTypes: [EVENT_TYPES.TABLE_DIRTY],
+    defaultFilter: () => dirtyTables.size === dirtyThreshold,
+  });
 
   const { app, writeGuards, buildActionEnvelope, start } = createServiceApp({
     label: LABEL,
@@ -70,11 +85,15 @@ async function main() {
   });
 
   app.get(`${ROUTE_PREFIX}/utilization`, asyncHandler(async (req, res) => {
-    res.json(await log.getUtilization(statsFilters(req.query)));
+    const filters = statsFilters(req.query);
+    const nowMs = await currentTimeMs(log, SOURCE, filters.experience);
+    res.json(await log.getUtilization({ ...filters, nowMs }));
   }));
 
   app.get(`${ROUTE_PREFIX}/dirty-duration`, asyncHandler(async (req, res) => {
-    res.json(await log.getDirtyDurationStats(statsFilters(req.query)));
+    const filters = statsFilters(req.query);
+    const nowMs = await currentTimeMs(log, SOURCE, filters.experience);
+    res.json(await log.getDirtyDurationStats({ ...filters, nowMs }));
   }));
 
   app.get(`${ROUTE_PREFIX}/history`, asyncHandler(async (req, res) => {
@@ -91,13 +110,14 @@ async function main() {
   const markTable = (eventType) => asyncHandler(async (req, res) => {
     const tableRef = req.body?.table_ref;
     if (!tableRef) throw badRequest('table_ref is required');
+    const timing = await actionTiming(log, SOURCE, req.body?.experience || EXPERIENCE);
     const envelope = buildActionEnvelope(() => createEnvelope({
       eventType,
       severity: SEVERITIES.INFO,
       source: actionSource(SOURCE),
       experience: req.body?.experience || EXPERIENCE,
       ref: tableRef,
-      simDate: todayUtc(),
+      ...timing,
       payload: { via: 'http-action' },
     }));
     await appendAndPublish(log, hub, envelope);

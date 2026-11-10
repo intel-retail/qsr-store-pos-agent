@@ -21,6 +21,9 @@ const { EVENT_TYPES } = require('./envelope');
 // query window opens is never missed, without scanning the whole table.
 const BOUNDARY_LOOKBACK_DAYS = 1;
 
+// Far beyond a real dirty-to-cleared gap (<=20min), so an older open dirty mark means the clear was never recorded.
+const STALE_DIRTY_HOURS = 24;
+
 /** Shifts a YYYY-MM-DD date string by `deltaDays` (may be negative). */
 function shiftDate(dateStr, deltaDays) {
   const d = new Date(`${dateStr}T00:00:00.000Z`);
@@ -34,6 +37,13 @@ function clipOverlapMs(startMs, endMs, periodStart, periodEnd) {
   const s = Math.max(startMs, periodStart);
   const e = Math.min(endMs, periodEnd);
   return e > s ? e - s : 0;
+}
+
+/** Like a positive clipOverlapMs, but also keeps a zero-length session (e.g. dirty right now) that lies inside the period. */
+function touchesPeriod(startMs, endMs, periodStart, periodEnd) {
+  if (periodStart == null || periodEnd == null) return false;
+  if (endMs > startMs) return clipOverlapMs(startMs, endMs, periodStart, periodEnd) > 0;
+  return startMs >= periodStart && startMs <= periodEnd;
 }
 
 /**
@@ -87,9 +97,9 @@ function pairOccupiedDirty(rows) {
  * very last observed event) measure as ~0 duration instead of "ongoing,
  * elapsed so far".
  */
-function computePeriodBounds({ startDate, endDate, observedStart }) {
+function computePeriodBounds({ startDate, endDate, observedStart, nowMs }) {
   const periodStart = startDate ? new Date(`${startDate}T00:00:00.000Z`).getTime() : observedStart;
-  const periodEnd = endDate ? new Date(`${endDate}T23:59:59.999Z`).getTime() : Date.now();
+  const periodEnd = endDate ? new Date(`${endDate}T23:59:59.999Z`).getTime() : nowMs;
   const periodMs = (periodStart != null && periodEnd != null) ? periodEnd - periodStart : 0;
   return { periodStart, periodEnd, periodMs };
 }
@@ -147,6 +157,24 @@ class TableEventLog extends BaseEventLog {
     }, options);
   }
 
+  /**
+   * Refs whose latest state-change event is table.dirty, i.e. tables waiting to be cleared right now.
+   * A dirty mark more than STALE_DIRTY_HOURS older than the newest event is treated as a lost clear.
+   */
+  async getDirtyTableRefs({ experience }) {
+    const result = await this.pool.query(
+      `SELECT ref FROM (
+         SELECT DISTINCT ON (ref) ref, event_type, occurred_at FROM ${this.tableName}
+         WHERE experience = $1 AND event_type IN ('${EVENT_TYPES.TABLE_OCCUPIED}', '${EVENT_TYPES.TABLE_DIRTY}', '${EVENT_TYPES.TABLE_CLEARED}')
+         ORDER BY ref, occurred_at DESC, id DESC
+       ) latest
+       WHERE event_type = '${EVENT_TYPES.TABLE_DIRTY}'
+         AND occurred_at >= (SELECT MAX(occurred_at) FROM ${this.tableName} WHERE experience = $1) - make_interval(hours => $2)`,
+      [experience, STALE_DIRTY_HOURS]
+    );
+    return result.rows.map((r) => r.ref);
+  }
+
   /** Per-table state-change timeline, most recent first. */
   async getTableHistory({ experience, tableRef, limit = 100 }) {
     if (!tableRef) throw new Error('tableRef is required');
@@ -160,7 +188,7 @@ class TableEventLog extends BaseEventLog {
       `SELECT event_type, severity, source, occurred_at, sim_date::text AS sim_date, payload
        FROM ${this.tableName}
        WHERE ${clauses.join(' AND ')}
-       ORDER BY occurred_at DESC LIMIT $${params.length}`,
+       ORDER BY occurred_at DESC, id DESC LIMIT $${params.length}`,
       params
     );
     return result.rows;
@@ -186,7 +214,7 @@ class TableEventLog extends BaseEventLog {
    * isn't dropped; a session still open at the end of the window (or right
    * now) counts its overlap with the window rather than being skipped.
    */
-  async getUtilization({ experience, tableRef, startDate, endDate } = {}) {
+  async getUtilization({ experience, tableRef, startDate, endDate, nowMs = Date.now() } = {}) {
     const queryStartDate = startDate ? shiftDate(startDate, -BOUNDARY_LOOKBACK_DAYS) : undefined;
     const { where, params } = this._buildFilters(
       { experience, tableRef, startDate: queryStartDate, endDate },
@@ -196,12 +224,12 @@ class TableEventLog extends BaseEventLog {
     const result = await this.pool.query(
       `SELECT ref, event_type, occurred_at FROM ${this.tableName}
        WHERE ${where}
-       ORDER BY ref, occurred_at ASC`,
+       ORDER BY ref, occurred_at ASC, id ASC`,
       params
     );
 
     const { sessions, observedStart } = pairOccupiedDirty(result.rows);
-    const { periodStart, periodEnd, periodMs } = computePeriodBounds({ startDate, endDate, observedStart });
+    const { periodStart, periodEnd, periodMs } = computePeriodBounds({ startDate, endDate, observedStart, nowMs });
 
     const byTable = new Map();
     for (const session of sessions) {
@@ -234,7 +262,7 @@ class TableEventLog extends BaseEventLog {
    * too, measured up to the end of the window (or now) — this is exactly the
    * "has been sitting dirty for N minutes and counting" case the tool exists for.
    */
-  async getDirtyDurationStats({ experience, tableRef, startDate, endDate } = {}) {
+  async getDirtyDurationStats({ experience, tableRef, startDate, endDate, nowMs = Date.now() } = {}) {
     const queryStartDate = startDate ? shiftDate(startDate, -BOUNDARY_LOOKBACK_DAYS) : undefined;
     const { where, params } = this._buildFilters(
       { experience, tableRef, startDate: queryStartDate, endDate },
@@ -244,12 +272,12 @@ class TableEventLog extends BaseEventLog {
     const result = await this.pool.query(
       `SELECT ref, event_type, occurred_at FROM ${this.tableName}
        WHERE ${where}
-       ORDER BY ref, occurred_at ASC`,
+       ORDER BY ref, occurred_at ASC, id ASC`,
       params
     );
 
     const { sessions, observedStart } = pairDirtyCleared(result.rows);
-    const { periodStart, periodEnd } = computePeriodBounds({ startDate, endDate, observedStart });
+    const { periodStart, periodEnd } = computePeriodBounds({ startDate, endDate, observedStart, nowMs });
 
     const byTable = new Map();
     const overall = [];
@@ -259,7 +287,7 @@ class TableEventLog extends BaseEventLog {
       // crosses into the requested period from before it isn't missed — not
       // to admit one that both starts and ends entirely before the period,
       // which would otherwise inflate these stats with out-of-range data.
-      if (clipOverlapMs(session.dirtyAt, clearedAtMs, periodStart, periodEnd) <= 0) continue;
+      if (!touchesPeriod(session.dirtyAt, clearedAtMs, periodStart, periodEnd)) continue;
       const seconds = Math.round((clearedAtMs - session.dirtyAt) / 1000);
       if (seconds < 0) continue; // guards a clock/ordering anomaly rather than reporting a negative duration
       if (!byTable.has(session.ref)) byTable.set(session.ref, []);

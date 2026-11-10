@@ -49,8 +49,14 @@ node src/footfall-service/seed-history.js --days=14
 
 Common env vars, same meaning across all three (see each service's own doc
 for the full reference): `SOURCE` (`sim`|`real`), `SIM_MODE` (`live`|`replay`),
-`SIM_SEED`, `SIM_SPEED`, `SIM_BENCHMARK`, `SIM_EXPERIENCE`, `SIM_REPLAY_DATE`.
+`SIM_SEED`, `SIM_SPEED`, `SIM_BENCHMARK`, `SIM_EXPERIENCE`, `SIM_REPLAY_DATE`,
+`SIM_PRELOAD_DAYS` (default `0`; compose sets `14`) — with `SOURCE=sim`, any of that many
+past days that is missing or holds fewer events than its full schedule is filled in at startup,
+so a fresh, interrupted or cut-off day completes.
 
+A live `SOURCE=sim` service resumes the simulated clock from its newest stored event on
+every start: it publishes only events after that point and never re-publishes stored ones, so
+a restart neither repeats events nor leaves a silent gap before new ones appear.
 Each also has its own `*_API_KEY` (optional — if set, requires a matching
 `X-Api-Key` header on mutating routes) and `*_CORS_ORIGIN` (default
 `http://localhost:4200`, comma-separated list) env var — e.g.
@@ -170,6 +176,26 @@ Each MCP server's actual tool list (`describe_service`, `list_event_types`,
 plus the service-specific read/act tools) is discoverable by calling
 `describe_service`/`list_event_types` at runtime, or by reading the
 `TOOLS` array at the top of each `mcp-*-server.js` file.
+
+## Pushing events to qsr-agent
+
+Set `QSR_AGENT_EVENT_URL` (for example `http://host.docker.internal:8600/autonomy/events`)
+and each service POSTs its events to the agent's webhook, in the agent's envelope:
+`event_id`, `event_type`, `service` (the Hermes MCP server name), `store_id`,
+`occurred_at`, and a `data` object holding the payload plus `ref`, `severity`,
+`experience`, `source` and `simulated`. This covers producer events, `SOURCE=real`
+ingests and actions made through the MCP sidecars. It is off in benchmark and replay mode.
+
+The agent runs one model call per event, so only these are sent by default:
+`queue.depth_changed` with depth >= 3 (store-activity; change with
+`QSR_AGENT_QUEUE_MIN_DEPTH`), `table.dirty` when the number of dirty tables first reaches
+45% of the tables (table-occupancy; change with `QSR_AGENT_DIRTY_MIN_TABLES`) and
+`zone.density_changed`
+with density `high` (footfall). Setting `QSR_AGENT_EVENT_TYPES` (comma list, `*` for
+every event) replaces those defaults and their filters. `QSR_AGENT_MIN_INTERVAL_MS` (default 30000) keeps only the first event per
+type and `ref` in each window. `QSR_AGENT_STORE_ID` must equal the agent's
+`QSR_RESTAURANT_ID`. Transient failures (network, 429, 5xx) are retried for about 25 seconds (six attempts, backoff capped at 10 s); other
+4xx responses are logged and dropped.
 
 ## SOURCE=sim|real, per service
 

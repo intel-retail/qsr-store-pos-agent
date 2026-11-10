@@ -15,6 +15,15 @@ x-mqtt-auth: &mqtt-auth
   MQTT_USERNAME: ${MQTT_USERNAME:?Set MQTT_USERNAME in .env (see .env.example)}
   MQTT_PASSWORD: ${MQTT_PASSWORD:?Set MQTT_PASSWORD in .env (see .env.example)}
 
+x-agent-events: &agent-events
+  QSR_AGENT_EVENT_URL: ${QSR_AGENT_EVENT_URL:-}
+  QSR_AGENT_STORE_ID: ${QSR_AGENT_STORE_ID:-qsr-001}
+  QSR_AGENT_EVENT_TYPES: ${QSR_AGENT_EVENT_TYPES:-}
+  QSR_AGENT_MIN_INTERVAL_MS: ${QSR_AGENT_MIN_INTERVAL_MS:-30000}
+  QSR_AGENT_QUEUE_MIN_DEPTH: ${QSR_AGENT_QUEUE_MIN_DEPTH:-3}
+  QSR_AGENT_DIRTY_MIN_TABLES: ${QSR_AGENT_DIRTY_MIN_TABLES:-}
+  QSR_AGENT_API_KEY: ${QSR_AGENT_API_KEY:-}
+
 services:
   # PostgreSQL Database (published on loopback only; containers reach it via the compose network)
   postgres:
@@ -159,14 +168,17 @@ services:
     command: ["node", "src/store-activity-service/index.js"]
     ports:
       - "3100:3100"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
-      <<: *mqtt-auth
+      <<: [*mqtt-auth, *agent-events]
       SOURCE: ${SIM_SOURCE:-sim}
       SIM_MODE: ${SIM_MODE:-live}
       SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
       SIM_SPEED: ${SIM_SPEED:-60}
       SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
       SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      SIM_PRELOAD_DAYS: ${SIM_PRELOAD_DAYS:-14}
       SIM_PORT: 3100
       SIM_DB_NAME: pos_cafe
       SIM_API_KEY: ${SIM_API_KEY:-}
@@ -186,7 +198,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 120s
 
   # Table occupancy & cleaning service. Same image as the store activity
   # service, own port/log table. See
@@ -211,14 +223,17 @@ services:
     command: ["node", "src/table-occupancy-service/index.js"]
     ports:
       - "3200:3200"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
-      <<: *mqtt-auth
+      <<: [*mqtt-auth, *agent-events]
       SOURCE: ${TABLE_SIM_SOURCE:-sim}
       SIM_MODE: ${SIM_MODE:-live}
       SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
       SIM_SPEED: ${SIM_SPEED:-60}
       SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
       SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      SIM_PRELOAD_DAYS: ${SIM_PRELOAD_DAYS:-14}
       TABLE_SIM_PORT: 3200
       TABLE_SIM_DB_NAME: pos_cafe
       TABLE_SIM_API_KEY: ${TABLE_SIM_API_KEY:-}
@@ -238,7 +253,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 120s
 
   # Footfall service (read-only). Same image, own port/log table.
   # See backend/src/footfall-service/FOOTFALL-SERVICE.md.
@@ -262,14 +277,17 @@ services:
     command: ["node", "src/footfall-service/index.js"]
     ports:
       - "3300:3300"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
-      <<: *mqtt-auth
+      <<: [*mqtt-auth, *agent-events]
       SOURCE: ${FOOTFALL_SIM_SOURCE:-sim}
       SIM_MODE: ${SIM_MODE:-live}
       SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
       SIM_SPEED: ${SIM_SPEED:-60}
       SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
       SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
+      SIM_PRELOAD_DAYS: ${SIM_PRELOAD_DAYS:-14}
       FOOTFALL_SIM_PORT: 3300
       FOOTFALL_SIM_DB_NAME: pos_cafe
       FOOTFALL_SIM_API_KEY: ${FOOTFALL_SIM_API_KEY:-}
@@ -288,7 +306,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 120s
 
   # MCP servers, streamable-HTTP mode (POST /mcp) — same images/tools as the
   # stdio MCP servers above, for agent frameworks that register MCP services by

@@ -16,11 +16,12 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const { StoreActivityEventLog } = require('./eventLog');
 const { EventHub } = require('../service-common/hub');
+const { attachAgentForwarder } = require('../service-common/agentForwarder');
 const { StoreActivityProducer } = require('./producer');
 const { EVENT_TYPES, SEVERITIES, createEnvelope, validateEnvelope } = require('./envelope');
-const { loadCommonConfig, loadTableCount, envInt, parseCorsOrigins, todayUtc } = require('../service-common/config');
+const { loadCommonConfig, loadTableCount, envInt, parseCorsOrigins } = require('../service-common/config');
 const { createServiceApp, startProducer, asyncHandler, badRequest, queryString, queryDate, queryLimit } = require('../service-common/serviceApp');
-const { appendAndPublish, actionSource } = require('../service-common/publish');
+const { appendAndPublish, actionSource, actionTiming } = require('../service-common/publish');
 
 const LABEL = 'store-activity-service';
 const ROUTE_PREFIX = '/store-activity';
@@ -49,6 +50,16 @@ async function main() {
 
   const hub = new EventHub({ enabled: !BENCHMARK });
   hub.connectMqtt();
+  attachAgentForwarder({
+    hub, label: LABEL, service: LABEL, config,
+    defaultEventTypes: [EVENT_TYPES.QUEUE_DEPTH_CHANGED],
+    // Only a building queue is worth a model call, not every +1/-1. Events without a depth (real/injected) pass.
+    defaultFilter: (e, env) => {
+      const depth = e.payload?.depth;
+      const min = env.QSR_AGENT_QUEUE_MIN_DEPTH?.trim() ? Number(env.QSR_AGENT_QUEUE_MIN_DEPTH) : 3;
+      return typeof depth !== 'number' || !(min > 0) || depth >= min;
+    },
+  });
 
   const { app, writeGuards, buildActionEnvelope, start } = createServiceApp({
     label: LABEL,
@@ -108,13 +119,14 @@ async function main() {
   app.post(`${ROUTE_PREFIX}/actions/mark-table-cleared`, ...writeGuards, asyncHandler(async (req, res) => {
     const tableRef = req.body?.table_ref;
     if (!tableRef) throw badRequest('table_ref is required');
+    const timing = await actionTiming(log, SOURCE, req.body?.experience || EXPERIENCE);
     const envelope = buildActionEnvelope(() => createEnvelope({
       eventType: EVENT_TYPES.TABLE_CLEARED,
       severity: SEVERITIES.INFO,
       source: actionSource(SOURCE),
       experience: req.body?.experience || EXPERIENCE,
       ref: tableRef,
-      simDate: todayUtc(),
+      ...timing,
       payload: { via: 'http-action' },
     }));
     await appendAndPublish(log, hub, envelope);
@@ -124,13 +136,14 @@ async function main() {
   app.post(`${ROUTE_PREFIX}/actions/inject-event`, ...writeGuards, asyncHandler(async (req, res) => {
     const eventType = req.body?.event_type;
     if (!Object.values(EVENT_TYPES).includes(eventType)) throw badRequest(`Unknown event_type: ${eventType}`);
+    const timing = await actionTiming(log, SOURCE, req.body?.experience || EXPERIENCE);
     const envelope = buildActionEnvelope(() => createEnvelope({
       eventType,
       severity: req.body?.severity || SEVERITIES.INFO,
       source: actionSource(SOURCE),
       experience: req.body?.experience || EXPERIENCE,
       ref: req.body?.ref || null,
-      simDate: todayUtc(),
+      ...timing,
       payload: req.body?.payload || {},
     }));
     await appendAndPublish(log, hub, envelope);
