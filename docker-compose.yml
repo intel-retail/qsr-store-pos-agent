@@ -43,7 +43,8 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # postgres 18+ expects the volume at /var/lib/postgresql (data lives in a versioned subdirectory)
+      - postgres_data:/var/lib/postgresql
       - ./database/init-db.sh:/docker-entrypoint-initdb.d/00-init-db.sh
       # Subdirectory: the image only auto-runs top-level files, and init-db.sh applies these to their own databases.
       - ./database/grocery/schema.sql:/docker-entrypoint-initdb.d/schemas/grocery-schema.sql
