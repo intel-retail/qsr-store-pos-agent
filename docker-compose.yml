@@ -27,7 +27,7 @@ x-agent-events: &agent-events
 services:
   # PostgreSQL Database (published on loopback only; containers reach it via the compose network)
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: pos-postgres
     restart: unless-stopped
     security_opt:
