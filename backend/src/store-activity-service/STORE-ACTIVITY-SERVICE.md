@@ -58,7 +58,7 @@ needed on the agent side — same MCP tools, same hub topics/stream.
 | `SIM_MODE` | `live` | `live` (headless real-time-accelerated production) or `replay` (re-emit a previously recorded day from the log). Only applies when `SOURCE=sim`. |
 | `SIM_REPLAY_DATE` | today (UTC) | `YYYY-MM-DD` day to replay when `SIM_MODE=replay`. |
 | `SIM_SEED` | `edgemart-default-seed` | Base seed. Same seed + same day = identical event sequence. |
-| `SIM_SPEED` | `60` | Time-acceleration multiplier (60 = one sim-hour per real minute). |
+| `SIM_SPEED` | `10` | Time-acceleration multiplier (10 = ten sim-hours per real hour; 60 = one sim-hour per real minute). |
 | `SIM_BENCHMARK` | `0` | `1`/`true` disables the hub's SSE/MQTT fanout for clean, deterministic benchmark runs. The log still records every event. |
 | `SIM_EXPERIENCE` | `cafe` | `cafe` or `grocery`. |
 | `SIM_PORT` | `3100` | Port for the headless HTTP surface (`/store-activity/health`, `/store-activity/events/stream`, `/store-activity/ingest`). |

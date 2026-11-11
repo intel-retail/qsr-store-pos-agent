@@ -125,21 +125,23 @@ class ScheduledProducer {
       this._timers.push(timer);
     }
 
-    // Live mode runs forever: roll over to the next calendar day once this
-    // one's 24h (accelerated) span elapses, instead of silently going idle.
-    this._scheduleNextDay(simDate, pacedSpeed, startedAt);
+    // Live mode runs forever: roll over to the next calendar day a sim-minute after this
+    // day's last event, instead of idling through the closed hours (at low SIM_SPEED
+    // that gap is hours of real time with no events).
+    const lastOffsetMs = schedule.reduce((max, e) => Math.max(max, new Date(e.occurred_at).getTime() - dayStartMs), 0);
+    this._scheduleNextDay(simDate, pacedSpeed, startedAt, lastOffsetMs > 0 ? lastOffsetMs + 60_000 : 24 * 3600_000);
 
     return pending.length;
   }
 
-  /** Schedules the next calendar day's runLive() once a full accelerated day has elapsed. */
-  _scheduleNextDay(simDate, pacedSpeed, startedAt) {
+  /** Schedules the next calendar day's runLive() once this day's accelerated span has elapsed. */
+  _scheduleNextDay(simDate, pacedSpeed, startedAt, spanMs) {
     const timer = setTimeout(() => {
       const nextDate = new Date(`${simDate}T00:00:00.000Z`);
       nextDate.setUTCDate(nextDate.getUTCDate() + 1);
       this.runLive({ simDate: nextDate.toISOString().slice(0, 10), speed: pacedSpeed })
         .catch((err) => console.error(`[${this.label}] Failed to roll over to next day:`, err.message));
-    }, delayFor(24 * 3600_000, pacedSpeed, startedAt));
+    }, delayFor(spanMs, pacedSpeed, startedAt));
     this._timers.push(timer);
   }
 

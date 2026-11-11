@@ -44,18 +44,18 @@ async function main() {
   const hub = new EventHub({ enabled: !BENCHMARK, mqttTopicPrefix: 'table-sim' });
   hub.connectMqtt();
 
-  // One dirty table is routine; the agent only hears when dirty tables pile up (first crossing of the threshold).
-  // Seeded from the log so a restart does not undercount tables that were already dirty.
+  // Optional: forward only when the dirty-table count first reaches QSR_AGENT_DIRTY_MIN_TABLES (0 = every table.dirty).
+  // Seeded from the log so a restart does not undercount.
   const dirtyTables = new Set(await log.getDirtyTableRefs({ experience: EXPERIENCE }));
   hub.on('event', (e) => {
     if (e.event_type === EVENT_TYPES.TABLE_DIRTY) dirtyTables.add(e.ref);
     else if (e.event_type === EVENT_TYPES.TABLE_CLEARED || e.event_type === EVENT_TYPES.TABLE_OCCUPIED) dirtyTables.delete(e.ref);
   });
-  const dirtyThreshold = envInt('QSR_AGENT_DIRTY_MIN_TABLES', Math.max(2, Math.ceil(TABLE_COUNT * 0.45)), { min: 1 });
+  const dirtyThreshold = envInt('QSR_AGENT_DIRTY_MIN_TABLES', 0, { min: 0 });
   attachAgentForwarder({
     hub, label: LABEL, service: LABEL, config,
     defaultEventTypes: [EVENT_TYPES.TABLE_DIRTY],
-    defaultFilter: () => dirtyTables.size === dirtyThreshold,
+    defaultFilter: () => dirtyThreshold === 0 || dirtyTables.size === dirtyThreshold,
   });
 
   const { app, writeGuards, buildActionEnvelope, start } = createServiceApp({

@@ -186,15 +186,16 @@ and each service POSTs its events to the agent's webhook, in the agent's envelop
 `experience`, `source` and `simulated`. This covers producer events, `SOURCE=real`
 ingests and actions made through the MCP sidecars. It is off in benchmark and replay mode.
 
-The agent runs one model call per event, so only these are sent by default:
-`queue.depth_changed` with depth >= 3 (store-activity; change with
-`QSR_AGENT_QUEUE_MIN_DEPTH`), `table.dirty` when the number of dirty tables first reaches
-45% of the tables (table-occupancy; change with `QSR_AGENT_DIRTY_MIN_TABLES`) and
-`zone.density_changed`
-with density `high` (footfall). Setting `QSR_AGENT_EVENT_TYPES` (comma list, `*` for
+The agent runs one model call per event, so each event type is throttled (below), and these
+are sent by default: `queue.depth_changed` (store-activity; set
+`QSR_AGENT_QUEUE_MIN_DEPTH` to only forward a building queue), `table.dirty`
+(table-occupancy; set `QSR_AGENT_DIRTY_MIN_TABLES` to only forward once that many tables are
+dirty) and `zone.density_changed` plus `footfall.count` (footfall). Setting `QSR_AGENT_EVENT_TYPES` (comma list, `*` for
 every event) replaces those defaults and their filters. `QSR_AGENT_MIN_INTERVAL_MS` (default 30000) keeps only the first event per
 type and `ref` in each window. `QSR_AGENT_STORE_ID` must equal the agent's
-`QSR_RESTAURANT_ID`. Transient failures (network, 429, 5xx) are retried for about 25 seconds (six attempts, backoff capped at 10 s); other
+`QSR_RESTAURANT_ID`. Forwarded `event_id`s get an `@<run>` suffix that changes on every service start, so a
+reset sim log that replays the same deterministic ids is not dropped as a duplicate by the agent
+(`QSR_AGENT_EVENT_ID_SALT` pins or, if empty, disables it). Transient failures (network, 429, 5xx) are retried for about 25 seconds (six attempts, backoff capped at 10 s); other
 4xx responses are logged and dropped.
 
 ## SOURCE=sim|real, per service

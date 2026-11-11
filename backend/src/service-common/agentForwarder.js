@@ -15,9 +15,9 @@ const MAX_BACKOFF_MS = 10_000;
 const MAX_KEYS = 5000;
 
 /** Envelope -> the agent's {event_id, event_type, service, store_id, occurred_at, data} contract. */
-function toAgentEvent(envelope, { service, storeId }) {
+function toAgentEvent(envelope, { service, storeId, idSalt = '' }) {
   return {
-    event_id: envelope.event_id,
+    event_id: idSalt ? `${envelope.event_id}@${idSalt}` : envelope.event_id,
     event_type: envelope.event_type,
     service,
     store_id: storeId,
@@ -69,6 +69,8 @@ function attachAgentForwarder({ hub, label, service, defaultEventTypes, defaultF
   }
 
   const storeId = env.QSR_AGENT_STORE_ID || 'qsr-001';
+  // Sim ids are deterministic, so a reset log replays ids the agent already deduped; a per-run salt keeps them fresh. Empty disables.
+  const idSalt = env.QSR_AGENT_EVENT_ID_SALT ?? Date.now().toString(36);
   const allowed = parseEventTypes(env.QSR_AGENT_EVENT_TYPES, defaultEventTypes);
   const filter = (env.QSR_AGENT_EVENT_TYPES ?? '').trim() ? null : defaultFilter;
   const minIntervalMs = nonNegative(env.QSR_AGENT_MIN_INTERVAL_MS, 30000);
@@ -147,7 +149,7 @@ function attachAgentForwarder({ hub, label, service, defaultEventTypes, defaultF
       queue.shift();
       stats.dropped += 1;
     }
-    queue.push(toAgentEvent(envelope, { service, storeId }));
+    queue.push(toAgentEvent(envelope, { service, storeId, idSalt }));
     drain();
   }
 
