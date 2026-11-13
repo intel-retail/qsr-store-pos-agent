@@ -27,7 +27,7 @@ function setup({ env = {}, config = { SOURCE: 'sim', MODE: 'live', BENCHMARK: fa
   const wrapped = async (url, init) => { const r = await fetchFake(url, init); if (fetchImpl) calls.push({ url, init, body: JSON.parse(init.body) }); return r; };
   const forwarder = attachAgentForwarder({
     hub, label: 't', service: 'table-occupancy-service', defaultEventTypes: ['table.dirty'], defaultFilter, config, fetchImpl: wrapped,
-    env: { QSR_AGENT_EVENT_URL: 'http://agent:8600/autonomy/events', QSR_AGENT_MIN_INTERVAL_MS: '0', ...env },
+    env: { QSR_AGENT_EVENT_URL: 'http://agent:8600/autonomy/events', QSR_AGENT_MIN_INTERVAL_MS: '0', QSR_AGENT_EVENT_ID_SALT: '', ...env },
   });
   return { hub, calls, forwarder };
 }
@@ -44,6 +44,18 @@ test('maps an envelope to the agent contract', () => {
     occurred_at: '2026-11-08T10:00:00.000Z',
     data: { note: 'x', ref: 'table-4', severity: 'info', experience: 'cafe', source: 'sim', simulated: true, venue: 'table-occupancy-service' },
   });
+});
+
+test('salts event ids per run so a reset log does not collide with ids the agent already holds', async () => {
+  const explicit = setup({ env: { QSR_AGENT_EVENT_ID_SALT: 'run1' } });
+  explicit.hub.emit('event', envelope());
+  await settle();
+  assert.equal(explicit.calls[0].body.event_id, 'e1@run1');
+
+  const auto = setup({ env: { QSR_AGENT_EVENT_ID_SALT: undefined } });
+  auto.hub.emit('event', envelope());
+  await settle();
+  assert.match(auto.calls[0].body.event_id, /^e1@[0-9a-z]+$/);
 });
 
 test('is off without QSR_AGENT_EVENT_URL, in benchmark and in replay', () => {

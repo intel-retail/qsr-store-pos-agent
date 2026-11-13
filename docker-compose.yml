@@ -20,7 +20,7 @@ x-agent-events: &agent-events
   QSR_AGENT_STORE_ID: ${QSR_AGENT_STORE_ID:-qsr-001}
   QSR_AGENT_EVENT_TYPES: ${QSR_AGENT_EVENT_TYPES:-}
   QSR_AGENT_MIN_INTERVAL_MS: ${QSR_AGENT_MIN_INTERVAL_MS:-30000}
-  QSR_AGENT_QUEUE_MIN_DEPTH: ${QSR_AGENT_QUEUE_MIN_DEPTH:-3}
+  QSR_AGENT_QUEUE_MIN_DEPTH: ${QSR_AGENT_QUEUE_MIN_DEPTH:-0}
   QSR_AGENT_DIRTY_MIN_TABLES: ${QSR_AGENT_DIRTY_MIN_TABLES:-}
   QSR_AGENT_API_KEY: ${QSR_AGENT_API_KEY:-}
 
@@ -43,7 +43,8 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # postgres 18+ expects the volume at /var/lib/postgresql (data lives in a versioned subdirectory)
+      - postgres_data:/var/lib/postgresql
       - ./database/init-db.sh:/docker-entrypoint-initdb.d/00-init-db.sh
       # Subdirectory: the image only auto-runs top-level files, and init-db.sh applies these to their own databases.
       - ./database/grocery/schema.sql:/docker-entrypoint-initdb.d/schemas/grocery-schema.sql
@@ -135,7 +136,7 @@ services:
     command:
       - sh
       - -c
-      - mosquitto_passwd -b -c /mosquitto/passwd "$$MQTT_USERNAME" "$$MQTT_PASSWORD" && (chown mosquitto:mosquitto /mosquitto/passwd 2>/dev/null || true) && exec /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf
+      - rm -f /mosquitto/passwd* && mosquitto_passwd -b -c /mosquitto/passwd "$$MQTT_USERNAME" "$$MQTT_PASSWORD" && (chown mosquitto:mosquitto /mosquitto/passwd 2>/dev/null || true) && exec /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf
     environment:
       <<: *mqtt-auth
     ports:
@@ -175,7 +176,7 @@ services:
       SOURCE: ${SIM_SOURCE:-sim}
       SIM_MODE: ${SIM_MODE:-live}
       SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
-      SIM_SPEED: ${SIM_SPEED:-60}
+      SIM_SPEED: ${SIM_SPEED:-10}
       SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
       SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
       SIM_PRELOAD_DAYS: ${SIM_PRELOAD_DAYS:-14}
@@ -230,7 +231,7 @@ services:
       SOURCE: ${TABLE_SIM_SOURCE:-sim}
       SIM_MODE: ${SIM_MODE:-live}
       SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
-      SIM_SPEED: ${SIM_SPEED:-60}
+      SIM_SPEED: ${SIM_SPEED:-10}
       SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
       SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
       SIM_PRELOAD_DAYS: ${SIM_PRELOAD_DAYS:-14}
@@ -284,7 +285,7 @@ services:
       SOURCE: ${FOOTFALL_SIM_SOURCE:-sim}
       SIM_MODE: ${SIM_MODE:-live}
       SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
-      SIM_SPEED: ${SIM_SPEED:-60}
+      SIM_SPEED: ${SIM_SPEED:-10}
       SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
       SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
       SIM_PRELOAD_DAYS: ${SIM_PRELOAD_DAYS:-14}

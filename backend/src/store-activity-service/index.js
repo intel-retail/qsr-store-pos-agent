@@ -53,10 +53,10 @@ async function main() {
   attachAgentForwarder({
     hub, label: LABEL, service: LABEL, config,
     defaultEventTypes: [EVENT_TYPES.QUEUE_DEPTH_CHANGED],
-    // Only a building queue is worth a model call, not every +1/-1. Events without a depth (real/injected) pass.
+    // Events without a depth (real/injected) pass.
     defaultFilter: (e, env) => {
       const depth = e.payload?.depth;
-      const min = env.QSR_AGENT_QUEUE_MIN_DEPTH?.trim() ? Number(env.QSR_AGENT_QUEUE_MIN_DEPTH) : 3;
+      const min = env.QSR_AGENT_QUEUE_MIN_DEPTH?.trim() ? Number(env.QSR_AGENT_QUEUE_MIN_DEPTH) : 0;
       return typeof depth !== 'number' || !(min > 0) || depth >= min;
     },
   });

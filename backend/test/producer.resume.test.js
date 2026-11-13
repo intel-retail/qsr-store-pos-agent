@@ -36,11 +36,11 @@ function setup({ latest, missing = [] }) {
   return { producer, published, backfilled };
 }
 
-// One simulated hour per real second; fires up to the next-day rollover (19+ s away) but not past it.
-const run = async (t, producer, opts) => {
+// One simulated hour per real second; ticks to the last event of the day, just before the next-day rollover.
+const run = async (t, producer, opts, tickMs = 9_000) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const pending = await producer.runLive({ simDate: DAY, speed: 3600, ...opts });
-  t.mock.timers.tick(15_000);
+  t.mock.timers.tick(tickMs);
   producer.stop();
   return pending;
 };
@@ -54,7 +54,7 @@ test('without resume the whole day is published from the start', async (t) => {
 test('resume publishes only what is after the stored tail and backfills the rest silently', async (t) => {
   const latest = { occurred_at: new Date(hourMs(10)), sim_date: DAY }; // 10:00 = event index 3
   const { producer, published, backfilled } = setup({ latest });
-  assert.equal(await run(t, producer, { resume: true }), 7);
+  assert.equal(await run(t, producer, { resume: true }, 6_000), 7);
   assert.deepEqual(backfilled, [0, 1, 2].map((i) => `${DAY}-${i}`));
   assert.deepEqual(published, [4, 5, 6, 7, 8, 9].map((i) => `${DAY}-${i}`));
 });
@@ -62,15 +62,25 @@ test('resume publishes only what is after the stored tail and backfills the rest
 test('resume publishes a sibling event at the tail instant that was never stored', async (t) => {
   const latest = { occurred_at: new Date(hourMs(10)), sim_date: DAY };
   const { producer, published } = setup({ latest, missing: [`${DAY}-3`] });
-  await run(t, producer, { resume: true });
+  await run(t, producer, { resume: true }, 6_000);
   assert.deepEqual(published, [3, 4, 5, 6, 7, 8, 9].map((i) => `${DAY}-${i}`));
 });
 
 test('resume continues on a later stored day instead of replaying today', async (t) => {
   const latest = { occurred_at: new Date(Date.parse('2026-11-10T12:00:00.000Z')), sim_date: '2026-11-10' };
   const { producer, published } = setup({ latest });
-  await run(t, producer, { resume: true });
+  await run(t, producer, { resume: true }, 4_000);
   assert.ok(published.length > 0 && published.every((id) => id.startsWith('2026-11-10-')));
+});
+
+test('rolls to the next day right after the last event, not after 24 sim hours', async (t) => {
+  const { producer, published } = setup({ latest: null });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await producer.runLive({ simDate: DAY, speed: 3600 });
+  t.mock.timers.tick(9_100); // 9 s = last event at 16:00, plus a sim-minute; 24 sim hours would be 24 s
+  producer.stop();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(published.some((id) => id.startsWith('2026-11-09-')));
 });
 
 test('resume with an old tail behaves like a fresh day', async (t) => {

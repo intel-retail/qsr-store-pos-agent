@@ -104,7 +104,7 @@ services:
       SOURCE: ${SIM_SOURCE:-sim}
       SIM_MODE: ${SIM_MODE:-live}
       SIM_SEED: ${SIM_SEED:-edgemart-default-seed}
-      SIM_SPEED: ${SIM_SPEED:-60}
+      SIM_SPEED: ${SIM_SPEED:-10}
       SIM_BENCHMARK: ${SIM_BENCHMARK:-0}
       SIM_EXPERIENCE: ${SIM_EXPERIENCE:-cafe}
       SIM_PORT: 3100

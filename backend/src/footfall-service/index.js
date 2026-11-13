@@ -41,8 +41,7 @@ async function main() {
   hub.connectMqtt();
   attachAgentForwarder({
     hub, label: LABEL, service: LABEL, config,
-    defaultEventTypes: [EVENT_TYPES.ZONE_DENSITY_CHANGED],
-    defaultFilter: (e) => e.payload?.density === 'high',
+    defaultEventTypes: [EVENT_TYPES.ZONE_DENSITY_CHANGED, EVENT_TYPES.FOOTFALL_COUNT],
   });
 
   const { app, start } = createServiceApp({
