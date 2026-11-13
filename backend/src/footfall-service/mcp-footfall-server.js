@@ -16,7 +16,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const { FootfallEventLog } = require('./eventLog');
 const { EVENT_TYPES } = require('./envelope');
 const { optionalSimDate } = require('../service-common/envelope');
-const { connectTransport } = require('../service-common/mcpTransport');
+const { connectTransport, READ_ONLY, toolNames } = require('../service-common/mcpTransport');
 const { loadCommonConfig } = require('../service-common/config');
 
 const { SOURCE, BENCHMARK, EXPERIENCE: EXPERIENCE_DEFAULT } = loadCommonConfig();
@@ -32,11 +32,13 @@ const TOOLS = [
     name: 'describe_service',
     description: 'Describe this footfall/movement service: source mode, envelope schema, and capabilities.',
     parameters: z.object({}),
+    annotations: READ_ONLY,
   },
   {
     name: 'list_event_types',
     description: 'List the footfall/density event types this service publishes.',
     parameters: z.object({}),
+    annotations: READ_ONLY,
   },
   {
     name: 'get_total_footfall',
@@ -47,6 +49,7 @@ const TOOLS = [
       start_date: z.string().describe('YYYY-MM-DD').optional(),
       end_date: z.string().describe('YYYY-MM-DD').optional(),
     }),
+    annotations: READ_ONLY,
   },
   {
     name: 'get_busy_time_patterns',
@@ -57,6 +60,7 @@ const TOOLS = [
       start_date: z.string().describe('YYYY-MM-DD').optional(),
       end_date: z.string().describe('YYYY-MM-DD').optional(),
     }),
+    annotations: READ_ONLY,
   },
 ];
 
@@ -77,6 +81,8 @@ async function handleTool(name, args = {}) {
         source: SOURCE,
         benchmark_mode: BENCHMARK,
         contract: 'describe / read (no actions). Live push events go to the hub (SSE + MQTT topic tree), not through MCP.',
+        read_tools: toolNames(TOOLS, true),
+        act_tools: toolNames(TOOLS, false),
         envelope_schema: {
           event_id: 'uuid',
           event_type: Object.keys(FOOTFALL_EVENT_TYPE_DESCRIPTIONS).map((k) => k),

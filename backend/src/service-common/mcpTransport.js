@@ -106,6 +106,15 @@ function wrapTool(handleTool, name) {
   };
 }
 
+/** MCP tool annotations: clients such as the QSR agent classify a tool by `readOnlyHint` before falling back to its name. */
+const READ_ONLY = { readOnlyHint: true };
+const ACTION = { readOnlyHint: false };
+
+/** Tool names from a TOOLS array split by annotation, for `describe_service` responses. */
+function toolNames(tools, readOnly) {
+  return tools.filter((t) => !!(t.annotations && t.annotations.readOnlyHint) === readOnly).map((t) => t.name);
+}
+
 /**
  * Builds and starts a fastmcp server using MCP_TRANSPORT ('stdio', default,
  * or 'http'). `tools` is this contract's existing TOOLS array, with each
@@ -131,7 +140,13 @@ async function connectTransport({ name, label, httpPort, tools, handleTool }) {
   });
 
   for (const tool of tools) {
-    server.addTool({ name: tool.name, description: tool.description, parameters: tool.parameters, execute: wrapTool(handleTool, tool.name) });
+    server.addTool({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+      ...(tool.annotations ? { annotations: tool.annotations } : {}),
+      execute: wrapTool(handleTool, tool.name),
+    });
   }
 
   if (mode !== 'http') {
@@ -175,4 +190,4 @@ async function connectTransport({ name, label, httpPort, tools, handleTool }) {
   console.error(`[${label}] MCP server running on streamable-http :${port}/mcp`);
 }
 
-module.exports = { connectTransport };
+module.exports = { connectTransport, READ_ONLY, ACTION, toolNames };
