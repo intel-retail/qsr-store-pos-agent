@@ -107,12 +107,13 @@ function wrapTool(handleTool, name) {
 }
 
 /** MCP tool annotations: clients such as the QSR agent classify a tool by `readOnlyHint` before falling back to its name. */
-const READ_ONLY = { readOnlyHint: true };
-const ACTION = { readOnlyHint: false };
+const READ_ONLY = Object.freeze({ readOnlyHint: true });
+const ACTION = Object.freeze({ readOnlyHint: false });
 
 /** Tool names from a TOOLS array split by annotation, for `describe_service` responses. */
 function toolNames(tools, readOnly) {
-  return tools.filter((t) => !!(t.annotations && t.annotations.readOnlyHint) === readOnly).map((t) => t.name);
+  // A tool without `readOnlyHint: true` counts as an action: unannotated tools fail closed.
+  return tools.filter((t) => (t.annotations?.readOnlyHint === true) === readOnly).map((t) => t.name);
 }
 
 /**
