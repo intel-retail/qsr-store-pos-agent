@@ -20,7 +20,7 @@ const { StoreActivityEventLog } = require('./eventLog');
 const { EventHub } = require('../service-common/hub');
 const { EVENT_TYPES, SEVERITIES, createEnvelope } = require('./envelope');
 const { optionalSimDate, assertSimDate } = require('../service-common/envelope');
-const { connectTransport } = require('../service-common/mcpTransport');
+const { connectTransport, READ_ONLY, ACTION, toolNames } = require('../service-common/mcpTransport');
 const { loadCommonConfig } = require('../service-common/config');
 const { appendAndPublish, actionSource, actionTiming } = require('../service-common/publish');
 
@@ -43,11 +43,13 @@ const TOOLS = [
     name: 'describe_service',
     description: 'Describe this service: source mode, envelope schema, and capabilities. Call this first if you have never seen this service before.',
     parameters: z.object({}),
+    annotations: READ_ONLY,
   },
   {
     name: 'list_event_types',
     description: 'List every event type this service can publish, with what triggers it.',
     parameters: z.object({}),
+    annotations: READ_ONLY,
   },
   {
     name: 'query_history',
@@ -59,6 +61,7 @@ const TOOLS = [
       start_date: z.string().describe('YYYY-MM-DD').optional(),
       end_date: z.string().describe('YYYY-MM-DD').optional(),
     }),
+    annotations: READ_ONLY,
   },
   {
     name: 'compare_to_baseline',
@@ -69,6 +72,7 @@ const TOOLS = [
       date: z.string().describe('YYYY-MM-DD'),
       baseline_date: z.string().describe('YYYY-MM-DD'),
     }),
+    annotations: READ_ONLY,
   },
   {
     name: 'tail_events',
@@ -77,6 +81,7 @@ const TOOLS = [
       since_id: z.number().describe('Return events with id greater than this (default 0)').optional(),
       limit: z.number().describe('Max rows (default 100)').optional(),
     }),
+    annotations: READ_ONLY,
   },
   {
     name: 'get_current_snapshot',
@@ -84,6 +89,7 @@ const TOOLS = [
     parameters: z.object({
       experience: z.string().optional(),
     }),
+    annotations: READ_ONLY,
   },
   {
     name: 'mark_table_cleared',
@@ -92,6 +98,7 @@ const TOOLS = [
       experience: z.string().optional(),
       table_ref: z.string().describe("e.g. 'table-4'"),
     }),
+    annotations: ACTION,
   },
   {
     name: 'inject_event',
@@ -103,6 +110,7 @@ const TOOLS = [
       severity: z.enum(Object.values(SEVERITIES)).optional(),
       payload: z.record(z.string(), z.unknown()).optional(),
     }),
+    annotations: ACTION,
   },
 ];
 
@@ -128,6 +136,8 @@ function handleDescribeService() {
     source: SOURCE,
     benchmark_mode: BENCHMARK,
     contract: 'describe / read / act. Live push events go to the hub (SSE + MQTT topic tree), not through MCP.',
+    read_tools: toolNames(TOOLS, true),
+    act_tools: toolNames(TOOLS, false),
     envelope_schema: {
       event_id: 'uuid',
       event_type: 'enum — see list_event_types',
