@@ -29,6 +29,6 @@
     "@angular/cli": "^22.2.6",
     "@angular/compiler-cli": "^22.2.5",
     "@types/three": "^0.187.0",
-    "typescript": "~6.0.3"
+    "typescript": "~7.0.2"
   }
 }
