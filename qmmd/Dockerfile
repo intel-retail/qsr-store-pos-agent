@@ -14,6 +14,6 @@ COPY --from=build /usr/local/bin/qmmd /usr/local/bin/qmmd
 USER appuser
 ENV RUST_LOG=info
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:9101/metrics || exit 1
+  CMD wget -qO- http://127.0.0.1:9101/metrics || exit 1
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["qmmd", "-f", "-p", "9101", "-m", "1000"]
