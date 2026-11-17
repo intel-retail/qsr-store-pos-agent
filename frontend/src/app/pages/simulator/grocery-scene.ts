@@ -80,7 +80,7 @@ export class GroceryScene {
     this.transformControls.addEventListener('dragging-changed', (event: any) => {
       this.orbitControls.enabled = !event.value;
     });
-    this.scene.add(this.transformControls);
+    this.scene.add(this.transformControls.getHelper());
 
     // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);

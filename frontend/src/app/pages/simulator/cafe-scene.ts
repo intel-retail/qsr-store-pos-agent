@@ -115,7 +115,7 @@ export class CafeScene {
     this.transformControls.addEventListener('dragging-changed', (event: any) => {
       this.orbitControls.enabled = !event.value;
     });
-    this.scene.add(this.transformControls);
+    this.scene.add(this.transformControls.getHelper());
 
     // Lighting - warm café ambiance
     const ambientLight = new THREE.AmbientLight(0xfff5e6, 0.5);
