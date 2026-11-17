@@ -61,6 +61,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY
+        - HTTPS_PROXY
+        - NO_PROXY
     container_name: pos-backend
     restart: unless-stopped
     deploy:
@@ -103,6 +107,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY
+        - HTTPS_PROXY
+        - NO_PROXY
     container_name: pos-frontend
     restart: unless-stopped
     security_opt:
@@ -463,6 +471,10 @@ services:
     build:
       context: ./qmmd
       dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY
+        - HTTPS_PROXY
+        - NO_PROXY
     container_name: pos-qmmd
     restart: unless-stopped
     security_opt:

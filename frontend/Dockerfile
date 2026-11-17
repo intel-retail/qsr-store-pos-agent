@@ -15,9 +15,11 @@ FROM nginx:alpine
 COPY --from=build /app/dist/pos-simulator/browser /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
-  && chown -R appuser:appgroup /var/cache/nginx /var/run /var/log/nginx /usr/share/nginx/html
+  && chown -R appuser:appgroup /var/cache/nginx /var/run /var/log/nginx /usr/share/nginx/html \
+  # newer nginx images use /run/nginx.pid, which is not writable as appuser
+  && sed -i 's|^pid .*;|pid /tmp/nginx.pid;|' /etc/nginx/nginx.conf
 USER appuser
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:80 || exit 1
+  CMD wget -qO- http://127.0.0.1:80 || exit 1
 CMD ["nginx", "-g", "daemon off;"]
