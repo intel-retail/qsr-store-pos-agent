@@ -27,7 +27,7 @@
   "devDependencies": {
     "@angular-devkit/build-angular": "^22.2.6",
     "@angular/cli": "^22.2.6",
-    "@angular/compiler-cli": "^22.2.5",
+    "@angular/compiler-cli": "^22.2.6",
     "@types/three": "^0.187.0",
     "typescript": "~6.0.3"
   }
