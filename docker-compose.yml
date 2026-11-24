@@ -62,9 +62,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        - HTTP_PROXY
-        - HTTPS_PROXY
-        - NO_PROXY
+        HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
+        HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
+        NO_PROXY: ${NO_PROXY:-${no_proxy:-}}
     container_name: pos-backend
     restart: unless-stopped
     deploy:
@@ -108,9 +108,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - HTTP_PROXY
-        - HTTPS_PROXY
-        - NO_PROXY
+        HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
+        HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
+        NO_PROXY: ${NO_PROXY:-${no_proxy:-}}
     container_name: pos-frontend
     restart: unless-stopped
     security_opt:
@@ -164,9 +164,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        - HTTP_PROXY
-        - HTTPS_PROXY
-        - NO_PROXY
+        HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
+        HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
+        NO_PROXY: ${NO_PROXY:-${no_proxy:-}}
     container_name: pos-store-activity-service
     restart: unless-stopped
     deploy:
@@ -219,9 +219,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        - HTTP_PROXY
-        - HTTPS_PROXY
-        - NO_PROXY
+        HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
+        HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
+        NO_PROXY: ${NO_PROXY:-${no_proxy:-}}
     container_name: pos-table-occupancy-service
     restart: unless-stopped
     deploy:
@@ -273,9 +273,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        - HTTP_PROXY
-        - HTTPS_PROXY
-        - NO_PROXY
+        HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
+        HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
+        NO_PROXY: ${NO_PROXY:-${no_proxy:-}}
     container_name: pos-footfall-service
     restart: unless-stopped
     deploy:
@@ -329,9 +329,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        - HTTP_PROXY
-        - HTTPS_PROXY
-        - NO_PROXY
+        HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
+        HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
+        NO_PROXY: ${NO_PROXY:-${no_proxy:-}}
     container_name: pos-store-activity-service-mcp
     restart: unless-stopped
     deploy:
@@ -375,9 +375,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        - HTTP_PROXY
-        - HTTPS_PROXY
-        - NO_PROXY
+        HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
+        HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
+        NO_PROXY: ${NO_PROXY:-${no_proxy:-}}
     container_name: pos-table-occupancy-service-mcp
     restart: unless-stopped
     deploy:
@@ -421,9 +421,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        - HTTP_PROXY
-        - HTTPS_PROXY
-        - NO_PROXY
+        HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
+        HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
+        NO_PROXY: ${NO_PROXY:-${no_proxy:-}}
     container_name: pos-footfall-service-mcp
     restart: unless-stopped
     deploy:
@@ -472,9 +472,9 @@ services:
       context: ./qmmd
       dockerfile: Dockerfile
       args:
-        - HTTP_PROXY
-        - HTTPS_PROXY
-        - NO_PROXY
+        HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
+        HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
+        NO_PROXY: ${NO_PROXY:-${no_proxy:-}}
     container_name: pos-qmmd
     restart: unless-stopped
     security_opt:
