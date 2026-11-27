@@ -2,7 +2,7 @@
 
 ## Version 2026.3.0
 
-**November 2026**
+**December 2026**
 
 This release introduces the **EdgeMart point-of-sale simulator** with Grocery and Café experiences, **Agent Chat powered by Hermes and MCP servers**, and **three store event services with MCP sidecars**, along with security hardening, dependency upgrades, and documentation.
 
