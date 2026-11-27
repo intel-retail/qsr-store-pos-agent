@@ -4,24 +4,22 @@
 
 **December 2026**
 
-This release introduces the **EdgeMart point-of-sale simulator** with Grocery and Café experiences, **Agent Chat powered by Hermes and MCP servers**, and **three store event services with MCP sidecars**, along with security hardening, dependency upgrades, and documentation.
+This release introduces the **Store Activity**, **Table Occupancy**, and **Footfall** simulator services, each with an MCP server for agents, along with security hardening and dependency upgrades.
 
 **New**
 
-- **EdgeMart POS Application**: Angular point-of-sale frontend and Node.js/Express backend with two experiences, Grocery and Café, each backed by its own PostgreSQL database, products, and visual layout. Includes product and transaction management, dark and standard themes, and a configuration page for managing MCP servers.
-- **3D Floor Simulator**: WebGL floor simulator for each experience with configurable customer count and simulation speed, interactive fixture editing, and simulated vision events for table occupancy.
-- **Agent Chat**: Chat tab with streaming responses that connects to the Hermes Gateway through an OpenAI-compatible API. Shows connection status, available tools, and a live table grid.
-- **POS and Table-Status MCP Servers**: MCP servers that expose product, sales, and customer data as well as real-time table state received over MQTT, so an agent can answer questions and mark tables as cleared or occupied.
-- **Store Event Services**: Store activity, table occupancy, and footfall services, each with its own durable event log, HTTP and server-sent-events interface, and MCP sidecar. Services run on simulated data or accept events from a real pipeline, can preload history, and resume without repeating or skipping events after a restart.
-- **Event Forwarding to the QSR Agent**: Store events can be forwarded to the QSR agent, with configurable event types and simulation speed, so the agent receives events regularly.
-- **MCP Tool Annotations**: Every store service tool declares whether it is read-only or an action, and `describe_service` lists read and action tools so MCP clients can classify them.
-- **Docker Compose Deployment**: Single-command deployment of the frontend, backend, PostgreSQL, authenticated MQTT broker, store services, and MCP sidecars, with health checks, resource limits, and unprivileged containers. Event service images are named and tagged so they can be built and pushed to a registry.
-- **System Metrics Panel**: CPU, memory, NPU, and Intel GPU metrics streamed to the UI, with GPU data collected by the qmmd daemon in a dedicated unprivileged container.
-- **Agent Skills**: Skills for deploying the EdgeMart stack, working with the store services, and connecting an agent through MCP, each with example prompts and evaluations.
+- **Store Activity Service**: Headless simulator of a café day that produces customer, order, table, and queue events. Agents can read the live snapshot and history, mark tables as cleared, and inject events.
+- **Table Occupancy Service**: Headless simulator that tracks table occupied, dirty, and cleared events, and reports utilization and dirty-duration statistics. Agents can mark tables as cleared or occupied.
+- **Footfall Service**: Read-only headless simulator that produces footfall counts and zone density changes, with busy-time pattern queries for agents.
+- **Durable Event Logs and Streaming**: Each service stores its events in its own database log, serves them over HTTP and server-sent events, and resumes from the last stored event after a restart without repeating or skipping events.
+- **Simulated or Real Events**: Each service can run on simulated data or accept events from a real pipeline, preload days of history in one command, and run in live or replay mode with a configurable seed and speed.
+- **MCP Servers**: Each service ships an MCP server, available over stdio and over HTTP in a Docker Compose sidecar, with optional API key authentication. Tools declare whether they are read-only or actions, and `describe_service` lists them for MCP clients.
+- **Event Forwarding to the QSR Agent**: Events from the services can be forwarded to the QSR agent, with configurable event types, so the agent receives them regularly.
+- **Container Images**: Each service has a named and tagged image, shared with its MCP sidecar, that can be built and pushed to a registry.
 
 **Improved**
 
-- **Security**: Required secrets for the database, MQTT broker, and Hermes API in Compose, authenticated MQTT, PostgreSQL bound to loopback, optional API key authentication with constant-time comparison for service endpoints, restricted CORS allowlists, request body and chat history limits, and input validation.
-- **Dependencies**: Upgraded to Angular 22, Node.js 26, PostgreSQL 18, Express 5, and current versions of fastmcp, helmet, dotenv, express-rate-limit, and three.js, and resolved reported dependency vulnerabilities.
-- **Docker Builds**: Backend, frontend, and qmmd images now build behind a corporate proxy, including hosts that define only lowercase proxy variables, and container health checks no longer fail on IPv4-only services.
-- **Documentation**: Added the README, store services guide, per-service documentation, security policy, and contributing guide.
+- **Security**: Required secrets for the database, MQTT broker, and agent API in Compose, authenticated MQTT, restricted CORS allowlists, constant-time API key comparison, and input validation.
+- **Dependencies**: Upgraded to current versions of Angular, Node.js, PostgreSQL, Express, and fastmcp, and resolved reported dependency vulnerabilities.
+- **Docker Builds**: Images now build behind a corporate proxy, including hosts that define only lowercase proxy variables, and container health checks no longer fail on IPv4-only services.
+- **Documentation**: Added a store services guide with per-service documentation.
