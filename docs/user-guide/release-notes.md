@@ -1,6 +1,6 @@
 # Release Notes: QSR Store POS Agent
 
-## Version 2026.3
+## Version 2026.3.0
 
 **November 2026**
 
